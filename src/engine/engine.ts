@@ -60,19 +60,6 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
     }
   }
 
-  if (hasTargets) {
-    // There are unexplored areas — stop if a monster is nearby
-    for (const monster of state.monsters) {
-      if (monster.dead) continue;
-      if (!(state.pmap[monster.x]![monster.y]!.flags & 0x2)) continue;
-      const dist = Math.abs(monster.x - px) + Math.abs(monster.y - py);
-      if (dist <= 4) {
-        state.addMessage(`You see a ${monster.name}! (Press a direction to attack)`);
-        return null;
-      }
-    }
-  }
-
   if (!hasTargets) {
     // No unexplored areas — navigate to stairs instead
     const onStairs = state.pmap[px]![py]!.layers[0] === 12; // DOWN_STAIRS
@@ -260,8 +247,34 @@ export class GameEngine {
       return;
     }
 
-    // Auto-explore
+    // Auto-explore (also auto-fights adjacent monsters)
     if (ch === "x") {
+      // Auto-fight: if any adjacent monster, attack the closest one
+      const px = this.state.playerPos.x;
+      const py = this.state.playerPos.y;
+      let adjacentMonster: { monster: ReturnType<typeof monsterAt>; dx: number; dy: number } | null = null;
+      let closestDist = Infinity;
+      for (const m of this.state.monsters) {
+        if (m.dead) continue;
+        const mdx = m.x - px;
+        const mdy = m.y - py;
+        if (Math.abs(mdx) <= 1 && Math.abs(mdy) <= 1 && (Math.abs(mdx) + Math.abs(mdy) > 0)) {
+          const d = Math.abs(mdx) + Math.abs(mdy);
+          if (d < closestDist) {
+            closestDist = d;
+            adjacentMonster = { monster: m, dx: mdx, dy: mdy };
+          }
+        }
+      }
+
+      if (adjacentMonster && adjacentMonster.monster) {
+        playerAttacksMonster(this.state, adjacentMonster.monster);
+        this.state.stats.turnNumber++;
+        processMonsterTurns(this.state);
+        this.endTurn();
+        return;
+      }
+
       const step = autoExploreStep(this.state);
       if (step) {
         if (tryMovePlayer(this.state, step.dx, step.dy)) {
@@ -275,7 +288,8 @@ export class GameEngine {
         }
       } else {
         this.state.addMessage("Nothing left to explore.");
-        this.endTurn();
+        this.updateDisplay();
+        this.emit("displayChanged");
       }
       return;
     }
