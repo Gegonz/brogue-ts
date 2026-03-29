@@ -20,6 +20,17 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
   const px = state.playerPos.x;
   const py = state.playerPos.y;
 
+  // Stop exploring if any visible monster is within 4 cells
+  for (const monster of state.monsters) {
+    if (monster.dead) continue;
+    if (!(state.pmap[monster.x]![monster.y]!.flags & 0x2)) continue; // not visible
+    const dist = Math.abs(monster.x - px) + Math.abs(monster.y - py);
+    if (dist <= 4) {
+      state.addMessage(`You see a ${monster.name}! (Press a direction to attack)`);
+      return null;
+    }
+  }
+
   const costMap = allocGrid();
   for (let x = 0; x < DCOLS; x++) {
     for (let y = 0; y < DROWS; y++) {
@@ -97,7 +108,7 @@ export interface GameStateSnapshot {
   map: string;
   stairsAt: { x: number; y: number } | null;
   items: { x: number; y: number; name: string; char: string }[];
-  monsters: { x: number; y: number; name: string; char: string; hp: number; maxHp: number }[];
+  monsters: { x: number; y: number; name: string; char: string; hp: number; maxHp: number; dist: number; dir?: string }[];
 }
 
 export class GameEngine {
@@ -255,7 +266,21 @@ export class GameEngine {
         .map(it => ({ x: it.x, y: it.y, name: it.name, char: it.displayChar })),
       monsters: this.state.monsters
         .filter(m => !m.dead)
-        .map(m => ({ x: m.x, y: m.y, name: m.name, char: m.displayChar, hp: m.hp, maxHp: m.maxHp })),
+        .map(m => {
+          const dx = m.x - this.state.playerPos.x;
+          const dy = m.y - this.state.playerPos.y;
+          const dist = Math.abs(dx) + Math.abs(dy);
+          let dir: string | undefined;
+          if (dist <= 10) {
+            const dirs: string[] = [];
+            if (dy < 0) dirs.push("N");
+            if (dy > 0) dirs.push("S");
+            if (dx > 0) dirs.push("E");
+            if (dx < 0) dirs.push("W");
+            dir = dirs.join("") || undefined;
+          }
+          return { x: m.x, y: m.y, name: m.name, char: m.displayChar, hp: m.hp, maxHp: m.maxHp, dist, dir };
+        }),
     };
   }
 
