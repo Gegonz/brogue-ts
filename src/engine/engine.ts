@@ -20,17 +20,6 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
   const px = state.playerPos.x;
   const py = state.playerPos.y;
 
-  // Stop exploring if any visible monster is within 4 cells
-  for (const monster of state.monsters) {
-    if (monster.dead) continue;
-    if (!(state.pmap[monster.x]![monster.y]!.flags & 0x2)) continue; // not visible
-    const dist = Math.abs(monster.x - px) + Math.abs(monster.y - py);
-    if (dist <= 4) {
-      state.addMessage(`You see a ${monster.name}! (Press a direction to attack)`);
-      return null;
-    }
-  }
-
   const costMap = allocGrid();
   for (let x = 0; x < DCOLS; x++) {
     for (let y = 0; y < DROWS; y++) {
@@ -71,7 +60,40 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
     }
   }
 
-  if (!hasTargets) return null;
+  if (hasTargets) {
+    // There are unexplored areas — stop if a monster is nearby
+    for (const monster of state.monsters) {
+      if (monster.dead) continue;
+      if (!(state.pmap[monster.x]![monster.y]!.flags & 0x2)) continue;
+      const dist = Math.abs(monster.x - px) + Math.abs(monster.y - py);
+      if (dist <= 4) {
+        state.addMessage(`You see a ${monster.name}! (Press a direction to attack)`);
+        return null;
+      }
+    }
+  }
+
+  if (!hasTargets) {
+    // No unexplored areas — navigate to stairs instead
+    const onStairs = state.pmap[px]![py]!.layers[0] === 12; // DOWN_STAIRS
+    if (onStairs) {
+      state.addMessage("You are standing on the stairs. Press > to descend.");
+      return null;
+    }
+    // Find stairs and navigate toward them
+    for (let x = 0; x < DCOLS; x++) {
+      for (let y = 0; y < DROWS; y++) {
+        if (state.pmap[x]![y]!.layers[0] === 12) {
+          distMap[x]![y] = 0;
+          hasTargets = true;
+        }
+      }
+    }
+    if (!hasTargets) {
+      state.addMessage("Nothing left to explore and no stairs found.");
+      return null;
+    }
+  }
 
   dijkstraScan(distMap, costMap, true);
 
@@ -89,7 +111,50 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
     }
   }
 
-  return (bestDx === 0 && bestDy === 0) ? null : { dx: bestDx, dy: bestDy };
+  if (bestDx === 0 && bestDy === 0) {
+    // Targets exist but are unreachable — try stairs instead
+    return autoNavigateToStairs(state, costMap, distMap);
+  }
+  return { dx: bestDx, dy: bestDy };
+}
+
+function autoNavigateToStairs(state: GameState, costMap: number[][], distMap: number[][]): { dx: number; dy: number } | null {
+  const px = state.playerPos.x;
+  const py = state.playerPos.y;
+
+  if (state.pmap[px]![py]!.layers[0] === 12) {
+    state.addMessage("You are standing on the stairs. Press > to descend.");
+    return null;
+  }
+
+  // Reset distMap and set stairs as target
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      distMap[x]![y] = state.pmap[x]![y]!.layers[0] === 12 ? 0 : 30000;
+    }
+  }
+
+  dijkstraScan(distMap, costMap, true);
+
+  let bestDx = 0, bestDy = 0, bestDist = distMap[px]![py]!;
+  for (let dir = 0; dir < 8; dir++) {
+    const nx = px + nbDirs[dir]![0]!;
+    const ny = py + nbDirs[dir]![1]!;
+    if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS) {
+      const d = distMap[nx]![ny]!;
+      if (d < bestDist) {
+        bestDist = d;
+        bestDx = nbDirs[dir]![0]!;
+        bestDy = nbDirs[dir]![1]!;
+      }
+    }
+  }
+
+  if (bestDx === 0 && bestDy === 0) {
+    state.addMessage("Cannot find a path to the stairs.");
+    return null;
+  }
+  return { dx: bestDx, dy: bestDy };
 }
 
 export interface GameStateSnapshot {
