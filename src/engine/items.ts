@@ -82,7 +82,7 @@ export function populateItems(state: GameState): void {
     if (!loc) continue;
 
     // Pick random item category, weighted
-    const weights = [3, 4, 4, 2, 1, 1, 1, 5]; // food, potion, scroll, weapon, armor, staff, ring, gold
+    const weights = [3, 6, 3, 2, 1, 1, 1, 4]; // food, potion(+heal), scroll, weapon, armor, staff, ring, gold
     let totalWeight = 0;
     for (const w of weights) totalWeight += w;
     let roll = rng.range(0, totalWeight - 1);
@@ -128,6 +128,16 @@ export function pickUpItem(state: GameState): FloorItem | null {
         const goldAmount = state.rng.range(5, 30) * state.stats.depthLevel;
         state.stats.gold += goldAmount;
         state.addMessage(`You pick up ${goldAmount} gold pieces.`);
+      } else if (item.category === ItemCategory.POTION) {
+        const healAmount = state.rng.range(8, 15);
+        const oldHp = state.stats.hp;
+        state.stats.hp = Math.min(state.stats.hp + healAmount, state.stats.maxHp);
+        const healed = state.stats.hp - oldHp;
+        if (healed > 0) {
+          state.addMessage(`You drink ${item.name}. You feel better! (+${healed} HP)`);
+        } else {
+          state.addMessage(`You drink ${item.name}. It tastes refreshing.`);
+        }
       } else {
         state.addMessage(`You see ${item.name} here.`);
       }

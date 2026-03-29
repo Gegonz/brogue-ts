@@ -69,7 +69,7 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
 export function populateMonsters(state: GameState): void {
   const rng = state.rng;
   const depth = state.stats.depthLevel;
-  const monsterCount = rng.range(3, 5 + Math.min(depth * 2, 10));
+  const monsterCount = rng.range(2, 3 + Math.min(depth, 8));
 
   state.monsters = [];
 

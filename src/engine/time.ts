@@ -4,7 +4,7 @@
 import type { GameState } from "./state.ts";
 import { ItemCategory } from "./items.ts";
 
-const REGEN_INTERVAL = 15;    // Regen 1 HP every N turns
+const REGEN_INTERVAL = 10;    // Regen 1 HP every N turns
 const HUNGER_THRESHOLD = 300; // "You are hungry" warning
 const WEAK_THRESHOLD = 150;   // "You feel weak" warning
 const FAINT_THRESHOLD = 50;   // "You feel faint" warning
