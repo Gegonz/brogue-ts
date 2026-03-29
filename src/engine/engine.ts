@@ -10,6 +10,7 @@ import { allocGrid } from "./grid.ts";
 import { dijkstraScan } from "./dijkstra.ts";
 import { populateItems, pickUpItem } from "./items.ts";
 import { populateMonsters, monsterAt, playerAttacksMonster, processMonsterTurns } from "./monsters.ts";
+import { processTurnEffects, tryEatFood } from "./time.ts";
 
 import { nbDirs } from "../shared/constants.ts";
 
@@ -124,6 +125,13 @@ export class GameEngine {
     this.state.addMessage("Welcome to Brogue!");
   }
 
+  /** Common end-of-turn processing */
+  private endTurn(): void {
+    processTurnEffects(this.state);
+    this.updateDisplay();
+    this.emit("displayChanged");
+  }
+
   handleKeystroke(key: number, _ctrl = false, _shift = false): void {
     if (this.state.gameOver) return;
 
@@ -142,20 +150,18 @@ export class GameEngine {
       const monster = monsterAt(this.state, targetX, targetY);
 
       if (monster) {
-        // Bump combat
         playerAttacksMonster(this.state, monster);
         this.state.stats.turnNumber++;
         processMonsterTurns(this.state);
-        this.updateDisplay();
-        this.emit("displayChanged");
+        this.endTurn();
       } else if (tryMovePlayer(this.state, dx, dy)) {
         this.state.stats.turnNumber++;
         pickUpItem(this.state);
+        tryEatFood(this.state);
         processMonsterTurns(this.state);
         computeFOV(this.state);
         updateLighting(this.state);
-        this.updateDisplay();
-        this.emit("displayChanged");
+        this.endTurn();
       }
       return;
     }
@@ -165,17 +171,16 @@ export class GameEngine {
       this.state.stats.turnNumber++;
       processMonsterTurns(this.state);
       this.state.addMessage("You rest for a moment.");
-      this.updateDisplay();
-      this.emit("displayChanged");
+      this.endTurn();
       return;
     }
 
     // Search
     if (ch === "s") {
       this.state.stats.turnNumber++;
+      processMonsterTurns(this.state);
       this.state.addMessage("You search the area.");
-      this.updateDisplay();
-      this.emit("displayChanged");
+      this.endTurn();
       return;
     }
 
@@ -186,15 +191,15 @@ export class GameEngine {
         if (tryMovePlayer(this.state, step.dx, step.dy)) {
           this.state.stats.turnNumber++;
           pickUpItem(this.state);
+          tryEatFood(this.state);
+          processMonsterTurns(this.state);
           computeFOV(this.state);
           updateLighting(this.state);
-          this.updateDisplay();
-          this.emit("displayChanged");
+          this.endTurn();
         }
       } else {
         this.state.addMessage("Nothing left to explore.");
-        this.updateDisplay();
-        this.emit("displayChanged");
+        this.endTurn();
       }
       return;
     }
