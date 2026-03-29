@@ -57,7 +57,7 @@ Claude edits code → server auto-reloads → test via MCP tools or browser. Nev
 | Architect.c | 3837 | engine/architect.ts | Done (7 room types, door sites, hallways, attachRooms, dungeon profiles. Skipped: machines/blueprints, lakes, loops) |
 | Light.c | 412 | engine/fov.ts, engine/light.ts | Done (FOV, getFOVMask, paintLight, updateLighting, miner's light. Skipped: flares, creature lights) |
 | Movement.c | 1800 | engine/movement.ts | Partial (basic move, door open, stair detection, auto-explore via Dijkstra. No combat, terrain effects) |
-| Items.c | 8040 | engine/items.ts | Not started |
+| Items.c | 8040 | engine/items.ts | Partial (floor item spawn, display, gold pickup. No inventory, identification, usage) |
 | Monsters.c | 4826 | engine/monsters.ts | Not started |
 | Combat.c | 1784 | engine/combat.ts | Not started |
 | Time.c | 2640 | engine/time.ts | Not started |

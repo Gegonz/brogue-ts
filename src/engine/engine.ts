@@ -8,6 +8,7 @@ import { computeFOV } from "./fov.ts";
 import { updateLighting } from "./light.ts";
 import { allocGrid } from "./grid.ts";
 import { dijkstraScan } from "./dijkstra.ts";
+import { populateItems, pickUpItem } from "./items.ts";
 
 import { nbDirs } from "../shared/constants.ts";
 
@@ -93,6 +94,7 @@ export interface GameStateSnapshot {
   messages: string[];
   map: string;
   stairsAt: { x: number; y: number } | null;
+  items: { x: number; y: number; name: string; char: string }[];
 }
 
 export class GameEngine {
@@ -107,6 +109,7 @@ export class GameEngine {
 
     // Generate the first dungeon level
     generateDungeon(this.state);
+    populateItems(this.state);
 
     // Compute initial FOV
     computeFOV(this.state);
@@ -133,6 +136,7 @@ export class GameEngine {
       const [dx, dy] = dirMap[ch]!;
       if (tryMovePlayer(this.state, dx, dy)) {
         this.state.stats.turnNumber++;
+        pickUpItem(this.state);
         computeFOV(this.state);
         this.updateDisplay();
         this.emit("displayChanged");
@@ -164,6 +168,7 @@ export class GameEngine {
       if (step) {
         if (tryMovePlayer(this.state, step.dx, step.dy)) {
           this.state.stats.turnNumber++;
+          pickUpItem(this.state);
           computeFOV(this.state);
           updateLighting(this.state);
           this.updateDisplay();
@@ -223,6 +228,9 @@ export class GameEngine {
       messages: this.state.messages.slice(-10),
       map: this.getAsciiMap(),
       stairsAt: this.findStairs(),
+      items: this.state.floorItems
+        .filter(it => !it.collected)
+        .map(it => ({ x: it.x, y: it.y, name: it.name, char: it.displayChar })),
     };
   }
 
@@ -318,6 +326,21 @@ export class GameEngine {
             Math.floor(appearance.bg[1] * 0.25),
             Math.floor(appearance.bg[2] * 0.35),
           ];
+        }
+      }
+    }
+
+    // Render floor items (before player so player draws on top)
+    for (const item of this.state.floorItems) {
+      if (item.collected) continue;
+      const ix = item.x + STAT_BAR_WIDTH + 1;
+      const iy = item.y + MESSAGE_LINES;
+      if (ix >= 0 && ix < COLS && iy >= 0 && iy < ROWS) {
+        const pcell = pmap[item.x]![item.y]!;
+        if (pcell.flags & 0x2) { // VISIBLE
+          const cell = buf[ix]![iy]!;
+          cell.character = item.displayChar;
+          cell.foreColorComponents = [...item.foreColor];
         }
       }
     }
