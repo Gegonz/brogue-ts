@@ -202,29 +202,33 @@ export class GameEngine {
         const appearance = getCellAppearance(layer);
         displayCell.character = appearance.char;
 
-        if (pcell.flags & 0x2) { // VISIBLE — apply lighting from tmap
+        if (pcell.flags & 0x2) { // VISIBLE — multiply tile color by light
           const light = tmap[x]![y]!.light;
-          // Blend tile color with light: base + light contribution, clamped 0-100
+          // BrogueCE blending: tile color * light / 100, with ambient minimum
+          const ambient = 20; // minimum visibility so lit areas aren't pitch black
+          const lr = Math.max(ambient, Math.min(150, light[0]));
+          const lg = Math.max(ambient, Math.min(150, light[1]));
+          const lb = Math.max(ambient, Math.min(150, light[2]));
           displayCell.foreColorComponents = [
-            Math.max(0, Math.min(100, appearance.fg[0] + Math.floor(light[0] / 3))),
-            Math.max(0, Math.min(100, appearance.fg[1] + Math.floor(light[1] / 3))),
-            Math.max(0, Math.min(100, appearance.fg[2] + Math.floor(light[2] / 3))),
+            Math.max(0, Math.min(100, Math.floor(appearance.fg[0] * lr / 100))),
+            Math.max(0, Math.min(100, Math.floor(appearance.fg[1] * lg / 100))),
+            Math.max(0, Math.min(100, Math.floor(appearance.fg[2] * lb / 100))),
           ];
           displayCell.backColorComponents = [
-            Math.max(0, Math.min(100, appearance.bg[0] + Math.floor(light[0] / 5))),
-            Math.max(0, Math.min(100, appearance.bg[1] + Math.floor(light[1] / 5))),
-            Math.max(0, Math.min(100, appearance.bg[2] + Math.floor(light[2] / 5))),
+            Math.max(0, Math.min(100, Math.floor(appearance.bg[0] * lr / 100))),
+            Math.max(0, Math.min(100, Math.floor(appearance.bg[1] * lg / 100))),
+            Math.max(0, Math.min(100, Math.floor(appearance.bg[2] * lb / 100))),
           ];
         } else { // DISCOVERED but not visible — blue-tinted memory
           displayCell.foreColorComponents = [
-            Math.floor(appearance.fg[0] * 0.25),
-            Math.floor(appearance.fg[1] * 0.25),
-            Math.floor(appearance.fg[2] * 0.35),
+            Math.floor(appearance.fg[0] * 0.3),
+            Math.floor(appearance.fg[1] * 0.3),
+            Math.floor(appearance.fg[2] * 0.45),
           ];
           displayCell.backColorComponents = [
-            Math.floor(appearance.bg[0] * 0.2),
-            Math.floor(appearance.bg[1] * 0.2),
-            Math.floor(appearance.bg[2] * 0.3),
+            Math.floor(appearance.bg[0] * 0.25),
+            Math.floor(appearance.bg[1] * 0.25),
+            Math.floor(appearance.bg[2] * 0.35),
           ];
         }
       }
@@ -250,20 +254,21 @@ export class GameEngine {
     const buf = this.state.displayBuffer;
     const stats = this.state.stats;
 
-    const lines = [
-      `Depth: ${stats.depthLevel}`,
-      `HP: ${stats.hp}/${stats.maxHp}`,
-      `Str: ${stats.strength}/${stats.maxStrength}`,
-      `Gold: ${stats.gold}`,
-      `Turn: ${stats.turnNumber}`,
+    const sidebarLines: Array<{ text: string; color: [number, number, number] }> = [
+      { text: `Depth: ${stats.depthLevel}`, color: [100, 100, 100] },
+      { text: `HP: ${stats.hp}/${stats.maxHp}`, color: stats.hp > stats.maxHp / 2 ? [0, 100, 0] : stats.hp > stats.maxHp / 4 ? [100, 100, 0] : [100, 0, 0] },
+      { text: `Str: ${stats.strength}/${stats.maxStrength}`, color: [80, 60, 30] },
+      { text: `Gold: ${stats.gold}`, color: [100, 85, 0] },
+      { text: `Nutr: ${stats.nutrition}`, color: [60, 40, 0] },
+      { text: `Turn: ${stats.turnNumber}`, color: [50, 50, 50] },
     ];
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      for (let j = 0; j < line.length && j < STAT_BAR_WIDTH; j++) {
-        const cell = buf[j]![i + 1]!;
-        cell.character = line[j]!;
-        cell.foreColorComponents = [80, 80, 80];
+    for (let i = 0; i < sidebarLines.length; i++) {
+      const { text, color } = sidebarLines[i]!;
+      for (let j = 0; j < text.length && j < STAT_BAR_WIDTH; j++) {
+        const cell = buf[j]![i + 2]!;
+        cell.character = text[j]!;
+        cell.foreColorComponents = [...color];
       }
     }
   }
