@@ -6,8 +6,77 @@ import { generateDungeon } from "./architect.ts";
 import { tryMovePlayer } from "./movement.ts";
 import { computeFOV } from "./fov.ts";
 import { updateLighting } from "./light.ts";
+import { allocGrid } from "./grid.ts";
+import { dijkstraScan } from "./dijkstra.ts";
+
+import { nbDirs } from "../shared/constants.ts";
 
 type EventCallback = (...args: unknown[]) => void;
+
+function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
+  const px = state.playerPos.x;
+  const py = state.playerPos.y;
+
+  const costMap = allocGrid();
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      const tile = state.pmap[x]![y]!.layers[0]!;
+      // Walkable: floor(2-5), open_door(8), stairs(12-13), door(7)
+      if ((tile >= 2 && tile <= 5) || tile === 7 || tile === 8 || tile === 12 || tile === 13) {
+        costMap[x]![y] = 1;
+      } else {
+        costMap[x]![y] = -2;
+      }
+    }
+  }
+
+  const distMap = allocGrid();
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      distMap[x]![y] = 30000;
+    }
+  }
+
+  let hasTargets = false;
+  for (let x = 1; x < DCOLS - 1; x++) {
+    for (let y = 1; y < DROWS - 1; y++) {
+      if (state.pmap[x]![y]!.flags & 0x1) continue; // already discovered
+      for (let dir = 0; dir < 8; dir++) {
+        const nx = x + nbDirs[dir]![0]!;
+        const ny = y + nbDirs[dir]![1]!;
+        if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS) {
+          const nb = state.pmap[nx]![ny]!;
+          const t = nb.layers[0]!;
+          if ((nb.flags & 0x1) && ((t >= 2 && t <= 5) || t === 8 || t === 12 || t === 13)) {
+            distMap[nx]![ny] = 0;
+            hasTargets = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!hasTargets) return null;
+
+  dijkstraScan(distMap, costMap, true);
+
+  let bestDx = 0, bestDy = 0, bestDist = distMap[px]![py]!;
+  for (let dir = 0; dir < 8; dir++) {
+    const nx = px + nbDirs[dir]![0]!;
+    const ny = py + nbDirs[dir]![1]!;
+    if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS) {
+      const d = distMap[nx]![ny]!;
+      if (d < bestDist) {
+        bestDist = d;
+        bestDx = nbDirs[dir]![0]!;
+        bestDy = nbDirs[dir]![1]!;
+      }
+    }
+  }
+
+  return (bestDx === 0 && bestDy === 0) ? null : { dx: bestDx, dy: bestDy };
+}
 
 export interface GameStateSnapshot {
   turn: number;
@@ -86,6 +155,25 @@ export class GameEngine {
       this.state.messages.push("You search the area.");
       this.updateDisplay();
       this.emit("displayChanged");
+      return;
+    }
+
+    // Auto-explore
+    if (ch === "x") {
+      const step = autoExploreStep(this.state);
+      if (step) {
+        if (tryMovePlayer(this.state, step.dx, step.dy)) {
+          this.state.stats.turnNumber++;
+          computeFOV(this.state);
+          updateLighting(this.state);
+          this.updateDisplay();
+          this.emit("displayChanged");
+        }
+      } else {
+        this.state.messages.push("Nothing left to explore.");
+        this.updateDisplay();
+        this.emit("displayChanged");
+      }
       return;
     }
 
