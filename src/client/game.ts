@@ -6,14 +6,14 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const engine = new GameEngine();
 const renderer = new BrogueRenderer(canvas, COLS, ROWS);
 
-// Start a new game
-engine.newGame();
-
-// Listen for display changes
+// Listen for display changes BEFORE starting game
 engine.on("displayChanged", () => {
   const buffer = engine.getDisplayBuffer();
   renderer.render(buffer);
 });
+
+// Start a new game
+engine.newGame();
 
 // Keyboard input
 document.addEventListener("keydown", (e) => {

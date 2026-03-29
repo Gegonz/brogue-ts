@@ -82,14 +82,23 @@ export function validLocationCount(grid: Grid, value: number): number {
   return count;
 }
 
-function fillContiguousRegion(grid: Grid, x: number, y: number, fillValue: number): number {
-  grid[x]![y] = fillValue;
-  let count = 1;
-  for (let dir = 0; dir < 4; dir++) {
-    const nx = x + nbDirs[dir]![0]!;
-    const ny = y + nbDirs[dir]![1]!;
-    if (coordinatesAreInMap(nx, ny) && grid[nx]![ny] === 1) {
-      count += fillContiguousRegion(grid, nx, ny, fillValue);
+function fillContiguousRegion(grid: Grid, startX: number, startY: number, fillValue: number): number {
+  // Iterative flood fill to avoid stack overflow on large blobs
+  const stack: number[] = [startX, startY];
+  grid[startX]![startY] = fillValue;
+  let count = 0;
+
+  while (stack.length > 0) {
+    const y = stack.pop()!;
+    const x = stack.pop()!;
+    count++;
+    for (let dir = 0; dir < 4; dir++) {
+      const nx = x + nbDirs[dir]![0]!;
+      const ny = y + nbDirs[dir]![1]!;
+      if (coordinatesAreInMap(nx, ny) && grid[nx]![ny] === 1) {
+        grid[nx]![ny] = fillValue;
+        stack.push(nx, ny);
+      }
     }
   }
   return count;
@@ -111,10 +120,21 @@ export function createBlobOnGrid(
   birth: boolean[], survival: boolean[],
   rng: () => number = Math.random,
 ): BlobResult {
-  let topMinX: number, topMinY: number, topMaxX: number, topMaxY: number;
-  let blobW: number, blobH: number, topNum: number;
+  let topMinX = 0, topMinY = 0, topMaxX = 0, topMaxY = 0;
+  let blobW = 0, blobH = 0, topNum = 0;
+  let attempts = 0;
+  let totalAttempts = 0;
 
   do {
+    if (++attempts > 50) {
+      minW = Math.max(2, Math.floor(minW / 2));
+      minH = Math.max(2, Math.floor(minH / 2));
+      attempts = 0;
+    }
+    if (++totalAttempts > 500) {
+      // Hard safety: return whatever we have
+      break;
+    }
     fillGrid(grid, 0);
 
     // Seed

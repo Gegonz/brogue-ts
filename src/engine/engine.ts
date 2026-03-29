@@ -1,10 +1,11 @@
 import { COLS, ROWS, DCOLS, DROWS, STAT_BAR_WIDTH, MESSAGE_LINES } from "../shared/constants.ts";
-import type { CellDisplayBuffer, Pos } from "../shared/types.ts";
+import type { CellDisplayBuffer } from "../shared/types.ts";
 import { GameState } from "./state.ts";
 import { RNG } from "./rng.ts";
 import { generateDungeon } from "./architect.ts";
 import { tryMovePlayer } from "./movement.ts";
 import { computeFOV } from "./fov.ts";
+import { updateLighting } from "./light.ts";
 
 type EventCallback = (...args: unknown[]) => void;
 
@@ -22,6 +23,7 @@ export interface GameStateSnapshot {
   };
   messages: string[];
   map: string;
+  stairsAt: { x: number; y: number } | null;
 }
 
 export class GameEngine {
@@ -39,6 +41,7 @@ export class GameEngine {
 
     // Compute initial FOV
     computeFOV(this.state);
+    updateLighting(this.state);
 
     // Update display buffer
     this.updateDisplay();
@@ -46,7 +49,7 @@ export class GameEngine {
     this.state.messages.push("Welcome to Brogue!");
   }
 
-  handleKeystroke(key: number, ctrl = false, shift = false): void {
+  handleKeystroke(key: number, _ctrl = false, _shift = false): void {
     if (this.state.gameOver) return;
 
     const ch = String.fromCharCode(key);
@@ -86,11 +89,26 @@ export class GameEngine {
       return;
     }
 
-    // Descend
+    // Descend stairs
     if (ch === ">") {
-      this.state.messages.push("Stairs are not yet implemented.");
-      this.updateDisplay();
-      this.emit("displayChanged");
+      const px = this.state.playerPos.x;
+      const py = this.state.playerPos.y;
+      const tile = this.state.pmap[px]![py]!.layers[0]!;
+      if (tile === 12) { // DOWN_STAIRS
+        this.state.stats.depthLevel++;
+        this.state.stats.turnNumber++;
+        this.state.initGrids();
+        generateDungeon(this.state);
+        computeFOV(this.state);
+        updateLighting(this.state);
+        this.updateDisplay();
+        this.emit("displayChanged");
+        this.state.messages.push(`You descend to depth ${this.state.stats.depthLevel}.`);
+      } else {
+        this.state.messages.push("There are no stairs here.");
+        this.updateDisplay();
+        this.emit("displayChanged");
+      }
       return;
     }
   }
@@ -116,7 +134,19 @@ export class GameEngine {
       },
       messages: this.state.messages.slice(-10),
       map: this.getAsciiMap(),
+      stairsAt: this.findStairs(),
     };
+  }
+
+  private findStairs(): { x: number; y: number } | null {
+    for (let x = 0; x < DCOLS; x++) {
+      for (let y = 0; y < DROWS; y++) {
+        if (this.state.pmap[x]![y]!.layers[0] === 12) { // DOWN_STAIRS
+          return { x, y };
+        }
+      }
+    }
+    return null;
   }
 
   getAsciiMap(): string {
@@ -156,7 +186,8 @@ export class GameEngine {
       }
     }
 
-    // Render dungeon cells
+    // Render dungeon cells with lighting
+    const tmap = this.state.tmap;
     for (let x = 0; x < DCOLS; x++) {
       for (let y = 0; y < DROWS; y++) {
         const pcell = pmap[x]![y]!;
@@ -164,19 +195,37 @@ export class GameEngine {
         const screenY = y + MESSAGE_LINES;
         const displayCell = buf[screenX]![screenY]!;
 
-        // Check visibility (simplified — use FOV flags)
+        // Check visibility
         if (!(pcell.flags & 0x1)) continue; // DISCOVERED flag
 
-        const layer = pcell.layers[0]!; // ground layer
-        const appearance = getCellAppearance(layer, pcell.flags);
+        const layer = pcell.layers[0]!;
+        const appearance = getCellAppearance(layer);
         displayCell.character = appearance.char;
-        displayCell.foreColorComponents = [...appearance.fg];
-        displayCell.backColorComponents = [...appearance.bg];
 
-        // Dim if not visible (only discovered/remembered)
-        if (!(pcell.flags & 0x2)) { // VISIBLE flag
-          displayCell.foreColorComponents = displayCell.foreColorComponents.map((c: number) => Math.floor(c * 0.4)) as [number, number, number];
-          displayCell.backColorComponents = displayCell.backColorComponents.map((c: number) => Math.floor(c * 0.3)) as [number, number, number];
+        if (pcell.flags & 0x2) { // VISIBLE — apply lighting from tmap
+          const light = tmap[x]![y]!.light;
+          // Blend tile color with light: base + light contribution, clamped 0-100
+          displayCell.foreColorComponents = [
+            Math.max(0, Math.min(100, appearance.fg[0] + Math.floor(light[0] / 3))),
+            Math.max(0, Math.min(100, appearance.fg[1] + Math.floor(light[1] / 3))),
+            Math.max(0, Math.min(100, appearance.fg[2] + Math.floor(light[2] / 3))),
+          ];
+          displayCell.backColorComponents = [
+            Math.max(0, Math.min(100, appearance.bg[0] + Math.floor(light[0] / 5))),
+            Math.max(0, Math.min(100, appearance.bg[1] + Math.floor(light[1] / 5))),
+            Math.max(0, Math.min(100, appearance.bg[2] + Math.floor(light[2] / 5))),
+          ];
+        } else { // DISCOVERED but not visible — blue-tinted memory
+          displayCell.foreColorComponents = [
+            Math.floor(appearance.fg[0] * 0.25),
+            Math.floor(appearance.fg[1] * 0.25),
+            Math.floor(appearance.fg[2] * 0.35),
+          ];
+          displayCell.backColorComponents = [
+            Math.floor(appearance.bg[0] * 0.2),
+            Math.floor(appearance.bg[1] * 0.2),
+            Math.floor(appearance.bg[2] * 0.3),
+          ];
         }
       }
     }
@@ -244,39 +293,20 @@ export class GameEngine {
   }
 }
 
-// Tile appearance lookup (simplified for Phase 1)
+// Tile appearance lookup — data-driven via tileCatalog
+import { tileCatalog } from "./catalogs/tiles.ts";
+
 interface TileAppearance {
   char: string;
   fg: [number, number, number];
   bg: [number, number, number];
 }
 
-function getCellAppearance(tileType: number, flags: number): TileAppearance {
-  // Simplified tile rendering — will use full tileCatalog later
-  switch (tileType) {
-    case 0: // NOTHING
-      return { char: " ", fg: [0, 0, 0], bg: [0, 0, 0] };
-    case 1: // GRANITE
-      return { char: "#", fg: [30, 30, 30], bg: [10, 10, 10] };
-    case 2: // FLOOR
-    case 3: // FLOOR_FLOODABLE
-      return { char: "\u00b7", fg: [30, 30, 30], bg: [5, 3, 0] };
-    case 4: // CARPET
-      return { char: "\u00b7", fg: [55, 15, 15], bg: [15, 5, 0] };
-    case 5: // MARBLE_FLOOR
-      return { char: "\u00b7", fg: [60, 60, 60], bg: [10, 10, 10] };
-    case 6: // WALL
-      return { char: "#", fg: [40, 40, 40], bg: [15, 15, 15] };
-    case 7: // DOOR
-      return { char: "+", fg: [60, 30, 0], bg: [15, 8, 0] };
-    case 8: // OPEN_DOOR
-      return { char: "'", fg: [40, 20, 0], bg: [5, 3, 0] };
-    case 9: // SECRET_DOOR (looks like wall)
-      return { char: "#", fg: [40, 40, 40], bg: [15, 15, 15] };
-    default:
-      // Downstairs, upstairs, liquid, etc.
-      if (tileType === 15) return { char: ">", fg: [80, 80, 80], bg: [5, 3, 0] };
-      if (tileType === 16) return { char: "<", fg: [80, 80, 80], bg: [5, 3, 0] };
-      return { char: "?", fg: [50, 50, 50], bg: [5, 3, 0] };
-  }
+function getCellAppearance(tileType: number): TileAppearance {
+  const entry = tileCatalog[tileType] ?? tileCatalog[2]!; // default to FLOOR
+  return {
+    char: entry.displayChar,
+    fg: [...entry.foreColor],
+    bg: [...entry.backColor],
+  };
 }

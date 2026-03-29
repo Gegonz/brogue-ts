@@ -1,27 +1,30 @@
 import { DCOLS, DROWS } from "../shared/constants.ts";
 import type { GameState } from "./state.ts";
 
+// Tile type constants (matching TileType enum)
+const FLOOR = 2;
+const FLOOR_FLOODABLE = 3;
+const CARPET = 4;
+const MARBLE_FLOOR = 5;
+const DOOR = 7;
+const OPEN_DOOR = 8;
+const DOWN_STAIRS = 12;
+const UP_STAIRS = 13;
+
 function isPassable(tileType: number): boolean {
-  // FLOOR=2, FLOOR_FLOODABLE=3, CARPET=4, MARBLE_FLOOR=5, OPEN_DOOR=8
-  // Also allow stairs: DOWN_STAIRS~=15, UP_STAIRS~=16
   switch (tileType) {
-    case 2: case 3: case 4: case 5: case 8:
-    case 15: case 16:
+    case FLOOR: case FLOOR_FLOODABLE: case CARPET: case MARBLE_FLOOR:
+    case OPEN_DOOR: case DOWN_STAIRS: case UP_STAIRS:
       return true;
     default:
       return false;
   }
 }
 
-function isDoor(tileType: number): boolean {
-  return tileType === 7; // DOOR
-}
-
 export function tryMovePlayer(state: GameState, dx: number, dy: number): boolean {
   const newX = state.playerPos.x + dx;
   const newY = state.playerPos.y + dy;
 
-  // Bounds check
   if (newX < 0 || newX >= DCOLS || newY < 0 || newY >= DROWS) {
     return false;
   }
@@ -30,8 +33,8 @@ export function tryMovePlayer(state: GameState, dx: number, dy: number): boolean
   const groundTile = cell.layers[0]!;
 
   // Open doors
-  if (isDoor(groundTile)) {
-    cell.layers[0] = 8; // OPEN_DOOR
+  if (groundTile === DOOR) {
+    cell.layers[0] = OPEN_DOOR;
     state.messages.push("You open the door.");
     return true;
   }
@@ -40,9 +43,14 @@ export function tryMovePlayer(state: GameState, dx: number, dy: number): boolean
   if (isPassable(groundTile)) {
     state.playerPos.x = newX;
     state.playerPos.y = newY;
+
+    // Standing on stairs — notify
+    if (groundTile === DOWN_STAIRS) {
+      state.messages.push("You see a downward staircase here. Press > to descend.");
+    }
+
     return true;
   }
 
-  // Bumped into wall
   return false;
 }

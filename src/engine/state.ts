@@ -24,6 +24,9 @@ export class GameState {
   // Display
   displayBuffer: CellDisplayBuffer[][] = [];
 
+  // Display detail (DV_DARK=1, DV_UNLIT=2, DV_LIT=3)
+  displayDetail: number[][] = [];
+
   // Pathfinding maps
   safetyMap: number[][] | null = null;
   allySafetyMap: number[][] | null = null;
@@ -62,6 +65,7 @@ export class GameState {
     this.tmap = this.allocTCellGrid();
     this.scentMap = this.allocNumberGrid();
     this.displayBuffer = this.allocDisplayBuffer();
+    this.displayDetail = this.allocNumberGrid();
     this.terrainRandomValues = Array.from({ length: DCOLS }, () =>
       Array.from({ length: DROWS }, () => new Array(8).fill(0))
     );
