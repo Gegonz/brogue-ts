@@ -1,6 +1,7 @@
 import { COLS, ROWS, DCOLS, DROWS } from "../shared/constants.ts";
 import type { CellDisplayBuffer, PCell, TCell, Pos, LevelData } from "../shared/types.ts";
 import type { FloorItem } from "./items.ts";
+import type { Monster } from "./monsters.ts";
 import type { RNG } from "./rng.ts";
 
 export interface PlayerStats {
@@ -65,6 +66,9 @@ export class GameState {
 
   // Floor items
   floorItems: FloorItem[] = [];
+
+  // Monsters
+  monsters: Monster[] = [];
 
   // Level storage
   levels: LevelData[] = [];

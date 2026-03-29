@@ -9,6 +9,7 @@ import { updateLighting } from "./light.ts";
 import { allocGrid } from "./grid.ts";
 import { dijkstraScan } from "./dijkstra.ts";
 import { populateItems, pickUpItem } from "./items.ts";
+import { populateMonsters, monsterAt, playerAttacksMonster, processMonsterTurns } from "./monsters.ts";
 
 import { nbDirs } from "../shared/constants.ts";
 
@@ -95,6 +96,7 @@ export interface GameStateSnapshot {
   map: string;
   stairsAt: { x: number; y: number } | null;
   items: { x: number; y: number; name: string; char: string }[];
+  monsters: { x: number; y: number; name: string; char: string; hp: number; maxHp: number }[];
 }
 
 export class GameEngine {
@@ -110,6 +112,7 @@ export class GameEngine {
     // Generate the first dungeon level
     generateDungeon(this.state);
     populateItems(this.state);
+    populateMonsters(this.state);
 
     // Compute initial FOV
     computeFOV(this.state);
@@ -134,10 +137,23 @@ export class GameEngine {
 
     if (dirMap[ch]) {
       const [dx, dy] = dirMap[ch]!;
-      if (tryMovePlayer(this.state, dx, dy)) {
+      const targetX = this.state.playerPos.x + dx;
+      const targetY = this.state.playerPos.y + dy;
+      const monster = monsterAt(this.state, targetX, targetY);
+
+      if (monster) {
+        // Bump combat
+        playerAttacksMonster(this.state, monster);
+        this.state.stats.turnNumber++;
+        processMonsterTurns(this.state);
+        this.updateDisplay();
+        this.emit("displayChanged");
+      } else if (tryMovePlayer(this.state, dx, dy)) {
         this.state.stats.turnNumber++;
         pickUpItem(this.state);
+        processMonsterTurns(this.state);
         computeFOV(this.state);
+        updateLighting(this.state);
         this.updateDisplay();
         this.emit("displayChanged");
       }
@@ -147,6 +163,7 @@ export class GameEngine {
     // Rest
     if (ch === ".") {
       this.state.stats.turnNumber++;
+      processMonsterTurns(this.state);
       this.state.addMessage("You rest for a moment.");
       this.updateDisplay();
       this.emit("displayChanged");
@@ -231,6 +248,9 @@ export class GameEngine {
       items: this.state.floorItems
         .filter(it => !it.collected)
         .map(it => ({ x: it.x, y: it.y, name: it.name, char: it.displayChar })),
+      monsters: this.state.monsters
+        .filter(m => !m.dead)
+        .map(m => ({ x: m.x, y: m.y, name: m.name, char: m.displayChar, hp: m.hp, maxHp: m.maxHp })),
     };
   }
 
@@ -326,6 +346,21 @@ export class GameEngine {
             Math.floor(appearance.bg[1] * 0.25),
             Math.floor(appearance.bg[2] * 0.35),
           ];
+        }
+      }
+    }
+
+    // Render monsters
+    for (const monster of this.state.monsters) {
+      if (monster.dead) continue;
+      const mx = monster.x + STAT_BAR_WIDTH + 1;
+      const my = monster.y + MESSAGE_LINES;
+      if (mx >= 0 && mx < COLS && my >= 0 && my < ROWS) {
+        const pcell = pmap[monster.x]![monster.y]!;
+        if (pcell.flags & 0x2) { // VISIBLE
+          const cell = buf[mx]![my]!;
+          cell.character = monster.displayChar;
+          cell.foreColorComponents = [...monster.foreColor];
         }
       }
     }
