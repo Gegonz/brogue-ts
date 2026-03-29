@@ -520,8 +520,8 @@ export class GameEngine {
 
     for (let i = 0; i < sidebarLines.length; i++) {
       const { text, color } = sidebarLines[i]!;
-      for (let j = 0; j < text.length && j < STAT_BAR_WIDTH; j++) {
-        const cell = buf[j]![i + 2]!;
+      for (let j = 0; j < text.length && j + 1 < STAT_BAR_WIDTH; j++) {
+        const cell = buf[j + 1]![i + MESSAGE_LINES + 1]!;
         cell.character = text[j]!;
         cell.foreColorComponents = [...color];
       }
@@ -534,8 +534,8 @@ export class GameEngine {
 
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i]!;
-      for (let j = 0; j < msg.length && j < COLS; j++) {
-        const cell = buf[j]![i]!;
+      for (let j = 0; j < msg.length && j + 1 < COLS; j++) {
+        const cell = buf[j + 1]![i]!;
         cell.character = msg[j]!;
         cell.foreColorComponents = [100, 100, 100];
       }

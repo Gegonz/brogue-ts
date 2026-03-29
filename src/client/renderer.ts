@@ -1,7 +1,8 @@
 import type { CellDisplayBuffer } from "../shared/types.ts";
 
-const CELL_WIDTH = 10;
-const CELL_HEIGHT = 18;
+const CELL_WIDTH = 9;
+const CELL_HEIGHT = 16;
+const LEFT_MARGIN = 4;
 
 export class BrogueRenderer {
   private ctx: CanvasRenderingContext2D;
@@ -11,7 +12,7 @@ export class BrogueRenderer {
   constructor(canvas: HTMLCanvasElement, cols: number, rows: number) {
     this.cols = cols;
     this.rows = rows;
-    canvas.width = cols * CELL_WIDTH;
+    canvas.width = cols * CELL_WIDTH + LEFT_MARGIN;
     canvas.height = rows * CELL_HEIGHT;
     this.ctx = canvas.getContext("2d")!;
     this.ctx.font = `${CELL_HEIGHT - 2}px monospace`;
@@ -29,7 +30,7 @@ export class BrogueRenderer {
   }
 
   private plotChar(cell: CellDisplayBuffer, x: number, y: number): void {
-    const px = x * CELL_WIDTH;
+    const px = x * CELL_WIDTH + LEFT_MARGIN;
     const py = y * CELL_HEIGHT;
 
     // Background
