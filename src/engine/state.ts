@@ -50,6 +50,18 @@ export class GameState {
   messages: string[] = [];
   messageArchive: string[] = [];
 
+  addMessage(msg: string): void {
+    // Deduplicate consecutive identical messages
+    if (this.messages.length > 0 && this.messages[this.messages.length - 1] === msg) {
+      return;
+    }
+    this.messages.push(msg);
+    // Cap at 100 messages
+    if (this.messages.length > 100) {
+      this.messageArchive.push(...this.messages.splice(0, 50));
+    }
+  }
+
   // Level storage
   levels: LevelData[] = [];
 

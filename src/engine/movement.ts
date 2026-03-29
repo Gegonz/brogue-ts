@@ -35,7 +35,7 @@ export function tryMovePlayer(state: GameState, dx: number, dy: number): boolean
   // Open doors
   if (groundTile === DOOR) {
     cell.layers[0] = OPEN_DOOR;
-    state.messages.push("You open the door.");
+    state.addMessage("You open the door.");
     return true;
   }
 
@@ -46,7 +46,7 @@ export function tryMovePlayer(state: GameState, dx: number, dy: number): boolean
 
     // Standing on stairs — notify
     if (groundTile === DOWN_STAIRS) {
-      state.messages.push("You see a downward staircase here. Press > to descend.");
+      state.addMessage("You see a downward staircase here. Press > to descend.");
     }
 
     return true;

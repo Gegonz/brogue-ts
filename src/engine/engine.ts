@@ -115,7 +115,7 @@ export class GameEngine {
     // Update display buffer
     this.updateDisplay();
     this.emit("displayChanged");
-    this.state.messages.push("Welcome to Brogue!");
+    this.state.addMessage("Welcome to Brogue!");
   }
 
   handleKeystroke(key: number, _ctrl = false, _shift = false): void {
@@ -143,7 +143,7 @@ export class GameEngine {
     // Rest
     if (ch === ".") {
       this.state.stats.turnNumber++;
-      this.state.messages.push("You rest for a moment.");
+      this.state.addMessage("You rest for a moment.");
       this.updateDisplay();
       this.emit("displayChanged");
       return;
@@ -152,7 +152,7 @@ export class GameEngine {
     // Search
     if (ch === "s") {
       this.state.stats.turnNumber++;
-      this.state.messages.push("You search the area.");
+      this.state.addMessage("You search the area.");
       this.updateDisplay();
       this.emit("displayChanged");
       return;
@@ -170,7 +170,7 @@ export class GameEngine {
           this.emit("displayChanged");
         }
       } else {
-        this.state.messages.push("Nothing left to explore.");
+        this.state.addMessage("Nothing left to explore.");
         this.updateDisplay();
         this.emit("displayChanged");
       }
@@ -191,9 +191,9 @@ export class GameEngine {
         updateLighting(this.state);
         this.updateDisplay();
         this.emit("displayChanged");
-        this.state.messages.push(`You descend to depth ${this.state.stats.depthLevel}.`);
+        this.state.addMessage(`You descend to depth ${this.state.stats.depthLevel}.`);
       } else {
-        this.state.messages.push("There are no stairs here.");
+        this.state.addMessage("There are no stairs here.");
         this.updateDisplay();
         this.emit("displayChanged");
       }
