@@ -158,21 +158,93 @@ export function monsterAttacksPlayer(state: GameState, monster: Monster): void {
 }
 
 /**
+ * Check if a monster has line-of-sight to the player.
+ * Uses the same VISIBLE flag as the FOV system — if the monster's cell
+ * is visible to the player, the monster can also "see" the player.
+ */
+function monsterCanSeePlayer(state: GameState, monster: Monster): boolean {
+  // Symmetric visibility: if the player can see the monster's cell, the monster can see the player
+  return (state.pmap[monster.x]![monster.y]!.flags & 0x2) !== 0; // VISIBLE flag
+}
+
+function isPassableTile(tile: number): boolean {
+  return (tile >= 2 && tile <= 5) || tile === 8 || tile === 12 || tile === 13; // floor/open_door/stairs
+}
+
+/**
  * Process monster turns — called each player turn.
- * Monsters adjacent to the player attack. Others do nothing (no AI yet).
+ * Adjacent monsters attack. Visible monsters chase. Others wander.
  */
 export function processMonsterTurns(state: GameState): void {
   const px = state.playerPos.x;
   const py = state.playerPos.y;
+  const rng = state.rng;
 
   for (const monster of state.monsters) {
     if (monster.dead || state.gameOver) continue;
 
-    // Check if adjacent to player (8 directions)
     const dx = Math.abs(monster.x - px);
     const dy = Math.abs(monster.y - py);
+
+    // Adjacent: attack
     if (dx <= 1 && dy <= 1 && (dx + dy > 0)) {
       monsterAttacksPlayer(state, monster);
+      continue;
+    }
+
+    // Can see player: chase (move one step toward player)
+    if (monsterCanSeePlayer(state, monster)) {
+      const stepX = Math.sign(px - monster.x);
+      const stepY = Math.sign(py - monster.y);
+
+      // Try direct move, then cardinal fallbacks
+      const moves: [number, number][] = [
+        [stepX, stepY],
+        [stepX, 0],
+        [0, stepY],
+      ];
+
+      let moved = false;
+      for (const [mx, my] of moves) {
+        if (mx === 0 && my === 0) continue;
+        const nx = monster.x + mx;
+        const ny = monster.y + my;
+        if (nx < 0 || nx >= DCOLS || ny < 0 || ny >= DROWS) continue;
+        const tile = state.pmap[nx]![ny]!.layers[0]!;
+        if (!isPassableTile(tile)) continue;
+        // Don't move onto player or other monster
+        if (nx === px && ny === py) continue;
+        if (state.monsters.some(m => !m.dead && m !== monster && m.x === nx && m.y === ny)) continue;
+        monster.x = nx;
+        monster.y = ny;
+        moved = true;
+        break;
+      }
+
+      // After moving, check if now adjacent — attack immediately
+      if (moved) {
+        const ndx = Math.abs(monster.x - px);
+        const ndy = Math.abs(monster.y - py);
+        if (ndx <= 1 && ndy <= 1 && (ndx + ndy > 0)) {
+          monsterAttacksPlayer(state, monster);
+        }
+      }
+      continue;
+    }
+
+    // Can't see player: random wander (20% chance per turn)
+    if (rng.percent(20)) {
+      const dir = rng.range(0, 7);
+      const wx = monster.x + [0, 0, -1, 1, -1, -1, 1, 1][dir]!;
+      const wy = monster.y + [-1, 1, 0, 0, -1, 1, -1, 1][dir]!;
+      if (wx >= 0 && wx < DCOLS && wy >= 0 && wy < DROWS) {
+        const tile = state.pmap[wx]![wy]!.layers[0]!;
+        if (isPassableTile(tile) && !(wx === px && wy === py)
+          && !state.monsters.some(m => !m.dead && m !== monster && m.x === wx && m.y === wy)) {
+          monster.x = wx;
+          monster.y = wy;
+        }
+      }
     }
   }
 }
