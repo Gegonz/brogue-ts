@@ -47,7 +47,7 @@ function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
         if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS) {
           const nb = state.pmap[nx]![ny]!;
           const t = nb.layers[0]!;
-          if ((nb.flags & 0x1) && ((t >= 2 && t <= 5) || t === 8 || t === 12 || t === 13)) {
+          if ((nb.flags & 0x1) && ((t >= 2 && t <= 5) || t === 7 || t === 8 || t === 12 || t === 13)) {
             distMap[nx]![ny] = 0;
             hasTargets = true;
             break;

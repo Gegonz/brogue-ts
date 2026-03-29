@@ -18,5 +18,5 @@ Bun.serve({
   },
 });
 
-console.log("Brogue-TS running on http://localhost:8080");
+console.log("Brogue-TS running on http://localhost:8080 (v8)");
 console.log("MCP endpoint: http://localhost:8080/mcp");
