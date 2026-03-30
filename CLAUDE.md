@@ -57,12 +57,17 @@ Claude edits code → server auto-reloads → test via MCP tools or browser. Nev
 | Architect.c | 3837 | engine/architect.ts | Done (7 room types, door sites, hallways, attachRooms, dungeon profiles. Skipped: machines/blueprints, lakes, loops) |
 | Light.c | 412 | engine/fov.ts, engine/light.ts | Done (FOV, getFOVMask, paintLight, updateLighting, miner's light. Skipped: flares, creature lights) |
 | Movement.c | 1800 | engine/movement.ts | Partial (basic move, door open, stair detection, auto-explore via Dijkstra. No combat, terrain effects) |
-| Items.c | 8040 | engine/items.ts | Partial (floor item spawn, display, gold pickup. No inventory, identification, usage) |
-| Monsters.c | 4826 | engine/monsters.ts | Partial (spawn, 10 types, chase AI, wander, death. No pathfinding AI, specials) |
-| Combat.c | 1784 | engine/combat.ts | Partial (bump-attack, retaliation, auto-fight, kill tracking. In monsters.ts) |
-| Time.c | 2640 | engine/time.ts | Partial (HP regen every 15 turns, nutrition drain 1/turn, hunger warnings, starvation death, food consumption) |
-| IO.c | 5128 | client/renderer.ts | Simplified (basic plotChar) |
-| RogueMain.c | 1400 | engine/game.ts | Simplified (minimal loop) |
+| Items.c | 8040 | engine/items.ts | ~3% (spawn, pickup, auto-equip. No inventory, identification, usage, enchantment) |
+| Monsters.c | 4826 | engine/monsters.ts | ~5% (10 of 80+ types, basic chase. No abilities, hordes, mutations, allies) |
+| Combat.c | 1784 | engine/combat.ts | ~5% (bump attack only. No accuracy, runic effects, bolts, sweep attacks) |
+| Movement.c | 1800 | engine/movement.ts | ~2% (basic move+doors. No terrain effects, auto-travel, diagonal blocking) |
+| Time.c | 2640 | engine/time.ts | ~3% (regen+nutrition. No environment updates, status effects, speed system) |
+| IO.c | 5128 | client/renderer.ts | ~5% (basic plotChar. No inventory display, targeting, menus) |
+| RogueMain.c | 1400 | engine/engine.ts | ~10% (simplified game loop. No recording, turn dispatch) |
+| Recordings.c | 1519 | — | Not started |
+| MainMenu.c | 1286 | — | Not started |
+| PowerTables.c | 345 | — | Not started |
+| Wizard.c | 522 | — | Not started |
 
 ## Key Technical Notes
 
@@ -82,11 +87,61 @@ When porting a C module:
 4. Validate browser rendering at http://localhost:8080
 5. Run `npx tsc --noEmit` to verify types
 
-## Phase Priorities
+## Phase Priorities (source-faithful porting)
 
-1. **Dungeon gen** — port full Architect.c (blob rooms, machines, liquid, stairs)
-2. **Lighting** — port Light.c (paintLight, updateLighting, proper colors)
-3. **Items** — spawn items, pick up, inventory display
-4. **Monsters** — spawn, AI, pathfinding
-5. **Combat** — attack, damage, death
-6. **Turn system** — full turn processing with environment
+Current coverage: ~17% of C source (6.6K TS / 38K C). Must port properly before AI iteration.
+
+### Priority 1: Items.c (8,040 LOC → ~3% ported)
+- Full item generation with enchantment levels
+- Identification system (unknown → detected → identified)
+- Inventory management (26 slots, pack weight)
+- Item usage: apply, throw, equip/unequip, drop
+- Potion effects (heal, levitation, fire immunity, detect magic, etc.)
+- Scroll effects (enchant, protect, teleport, identify, etc.)
+- Staff/wand charges and bolt effects
+- Ring passive effects
+- Charm system
+
+### Priority 2: Combat.c (1,784 LOC → 0% ported separately)
+- Full attack resolution with accuracy/dodge
+- Runic weapon effects (speed, confusion, slowing, paralysis, etc.)
+- Armor runic effects (reflection, dampening, etc.)
+- Bolt/zap system with line-of-sight
+- Sweep/lunge/penetrating attacks
+- Hit lists for area attacks
+
+### Priority 3: Monsters.c (4,826 LOC → ~5% ported)
+- Full monster catalog from Globals.c (80+ types)
+- Monster abilities (summon, breathe fire, blink, etc.)
+- Horde spawning system
+- Ally/captive system
+- Mutation system
+- Full pathfinding AI (Dijkstra-based, not just chase)
+- Creature status effects
+
+### Priority 4: Movement.c (2,487 LOC → ~2% ported)
+- Terrain interactions (water, lava, gas, webs, etc.)
+- Auto-travel with path display
+- Diagonal blocking
+- Confusion movement
+- Key/door mechanics
+
+### Priority 5: Time.c (2,640 LOC → ~3% ported)
+- Full turn processing with tick system
+- Environment updates (fire spread, gas dissipation, terrain promotion)
+- Status effect processing (poison, confusion, paralysis, etc.)
+- Creature speed system (movement/attack speed)
+
+### Priority 6: Architect.c machines (3,837 LOC → ~19% ported)
+- Machine/blueprint system (traps, vaults, reward rooms)
+- Lake generation (water, lava, chasms)
+- Loop detection and corridor widening
+- Secret doors, portcullises
+- Level connectivity verification
+
+### Priority 7: IO.c (5,128 LOC)
+- Full cell appearance with color multiplication
+- Inventory display
+- Targeting cursor
+- Text boxes and menus
+- Auto-ID on item use
