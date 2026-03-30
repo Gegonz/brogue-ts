@@ -532,11 +532,19 @@ export class GameEngine {
     const sidebarLines: Array<{ text: string; color: [number, number, number] }> = [
       { text: `Depth: ${stats.depthLevel}`, color: [100, 100, 100] },
       { text: `HP: ${stats.hp}/${stats.maxHp}`, color: stats.hp > stats.maxHp / 2 ? [0, 100, 0] : stats.hp > stats.maxHp / 4 ? [100, 100, 0] : [100, 0, 0] },
-      { text: `Str: ${stats.strength}/${stats.maxStrength}`, color: [80, 60, 30] },
+      { text: `Str: ${stats.strength}`, color: [80, 60, 30] },
       { text: `Gold: ${stats.gold}`, color: [100, 85, 0] },
-      { text: `Nutr: ${stats.nutrition}`, color: [60, 40, 0] },
-      { text: `Turn: ${stats.turnNumber}`, color: [50, 50, 50] },
+      { text: `${stats.nutrition}`, color: stats.nutrition > 300 ? [60, 40, 0] : [100, 0, 0] },
+      { text: `Kills: ${stats.monstersKilled}`, color: [70, 20, 20] },
     ];
+
+    // Equipment lines
+    if (this.state.weapon) {
+      sidebarLines.push({ text: `) ${this.state.weapon.name.replace(/^a /, '')}`, color: [100, 100, 100] });
+    }
+    if (this.state.armor) {
+      sidebarLines.push({ text: `[ ${this.state.armor.name}`, color: [70, 55, 25] });
+    }
 
     for (let i = 0; i < sidebarLines.length; i++) {
       const { text, color } = sidebarLines[i]!;

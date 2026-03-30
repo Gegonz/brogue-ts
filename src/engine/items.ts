@@ -172,6 +172,77 @@ export function pickUpItem(state: GameState): FloorItem | null {
         } else {
           state.addMessage(`You see ${item.name} but your ${state.armor.name} is better.`);
         }
+      } else if (item.category === ItemCategory.SCROLL) {
+        // Scrolls have immediate effects based on kind
+        const effects = [
+          () => { // scroll 0: generic — minor heal
+            const heal = state.rng.range(5, 10);
+            state.stats.hp = Math.min(state.stats.hp + heal, state.stats.maxHp);
+            state.addMessage(`You read ${item.name}. A warm glow surrounds you. (+${heal} HP)`);
+          },
+          () => { // scroll 1: enchantment — boost weapon
+            if (state.weapon) {
+              state.weapon.bonusDamage += 2;
+              state.addMessage(`You read ${item.name}. Your ${state.weapon.name} glows! (+2 damage)`);
+            } else {
+              state.stats.strength++;
+              state.stats.maxStrength++;
+              state.addMessage(`You read ${item.name}. You feel stronger! (+1 strength)`);
+            }
+          },
+          () => { // scroll 2: strength
+            state.stats.strength++;
+            state.stats.maxStrength++;
+            state.addMessage(`You read ${item.name}. You feel stronger! (+1 strength)`);
+          },
+          () => { // scroll 3: protect armor
+            if (state.armor) {
+              state.armor.defense += 1;
+              state.addMessage(`You read ${item.name}. Your ${state.armor.name} shimmers! (+1 defense)`);
+            } else {
+              state.stats.maxHp += 5;
+              state.stats.hp += 5;
+              state.addMessage(`You read ${item.name}. You feel tougher! (+5 max HP)`);
+            }
+          },
+        ];
+        const effectIdx = item.kind % effects.length;
+        effects[effectIdx]!();
+      } else if (item.category === ItemCategory.RING) {
+        // Rings give permanent passive bonuses
+        const ringEffects = [
+          () => { state.stats.maxHp += 3; state.stats.hp += 3;
+            state.addMessage(`You put on ${item.name}. You feel healthier! (+3 max HP)`); },
+          () => { state.stats.strength++;
+            state.addMessage(`You put on ${item.name}. You feel a surge of power! (+1 strength)`); },
+          () => { state.stats.maxHp += 5; state.stats.hp += 5;
+            state.addMessage(`You put on ${item.name}. You feel much tougher! (+5 max HP)`); },
+          () => { state.stats.strength++; state.stats.maxStrength++;
+            state.addMessage(`You put on ${item.name}. Strength courses through you! (+1 strength)`); },
+        ];
+        ringEffects[item.kind % ringEffects.length]!();
+      } else if (item.category === ItemCategory.STAFF) {
+        // Staves: zap for damage (simplified — just deal damage to nearest visible monster)
+        let nearest: { monster: typeof state.monsters[0]; dist: number } | null = null;
+        for (const m of state.monsters) {
+          if (m.dead) continue;
+          if (!(state.pmap[m.x]![m.y]!.flags & 0x2)) continue;
+          const d = Math.abs(m.x - state.playerPos.x) + Math.abs(m.y - state.playerPos.y);
+          if (!nearest || d < nearest.dist) nearest = { monster: m, dist: d };
+        }
+        if (nearest) {
+          const zapDamage = state.rng.range(5, 12);
+          nearest.monster.hp -= zapDamage;
+          if (nearest.monster.hp <= 0) {
+            nearest.monster.dead = true;
+            state.stats.monstersKilled++;
+            state.addMessage(`You zap ${item.name} at the ${nearest.monster.name}! It dies! (${zapDamage} damage)`);
+          } else {
+            state.addMessage(`You zap ${item.name} at the ${nearest.monster.name}! (${zapDamage} damage, ${nearest.monster.hp}/${nearest.monster.maxHp} HP)`);
+          }
+        } else {
+          state.addMessage(`You wave ${item.name} but nothing happens.`);
+        }
       } else {
         state.addMessage(`You see ${item.name} here.`);
       }
