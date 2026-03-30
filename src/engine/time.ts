@@ -16,14 +16,17 @@ const FAINT_THRESHOLD = 50;   // "You feel faint" warning
 export function processTurnEffects(state: GameState): void {
   if (state.gameOver) return;
 
-  // --- HP Regeneration ---
+  // --- HP Regeneration (scales with level) ---
   if (state.stats.hp < state.stats.maxHp && state.stats.turnNumber % REGEN_INTERVAL === 0) {
-    state.stats.hp = Math.min(state.stats.hp + 1, state.stats.maxHp);
+    const regenAmount = Math.max(1, Math.floor(state.stats.level / 2) + 1);
+    state.stats.hp = Math.min(state.stats.hp + regenAmount, state.stats.maxHp);
   }
 
-  // --- Nutrition drain ---
+  // --- Nutrition drain (every 2 turns) ---
   const prevNutrition = state.stats.nutrition;
-  state.stats.nutrition = Math.max(0, state.stats.nutrition - 1);
+  if (state.stats.turnNumber % 2 === 0) {
+    state.stats.nutrition = Math.max(0, state.stats.nutrition - 1);
+  }
 
   // Hunger warnings at thresholds
   if (prevNutrition > HUNGER_THRESHOLD && state.stats.nutrition <= HUNGER_THRESHOLD) {
