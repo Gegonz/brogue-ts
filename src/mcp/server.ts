@@ -85,6 +85,22 @@ mcpServer.registerTool("brogue_look", {
   };
 });
 
+mcpServer.registerTool("brogue_inventory", {
+  description: "View the player's inventory (pack contents). Shows all carried items with inventory letters, categories, and equipped status.",
+  inputSchema: {},
+}, async () => {
+  const eng = getEngine();
+  const { inventoryDescription } = await import("../engine/inventory.ts");
+  const state = eng["state"];
+  const lines = inventoryDescription(state);
+  const packSummary = state.packItems.map((i: { inventoryLetter: string; name: string; quantity: number; equipped: boolean }) =>
+    ({ letter: i.inventoryLetter, name: i.name, qty: i.quantity, equipped: i.equipped })
+  );
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify({ inventory: lines, items: packSummary, count: state.packItems.length }, null, 2) }],
+  };
+});
+
 mcpServer.registerTool("brogue_auto", {
   description: "Play one intelligent turn automatically. Analyzes the game state and takes the best action: fight adjacent monsters, explore toward unexplored areas, navigate to stairs when done, or descend when on stairs. Returns the updated game state with a 'reasoning' field explaining the decision. Call this repeatedly for fully autonomous play.",
   inputSchema: {

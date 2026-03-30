@@ -2,6 +2,7 @@ import { COLS, ROWS, DCOLS, DROWS } from "../shared/constants.ts";
 import type { CellDisplayBuffer, PCell, TCell, Pos, LevelData } from "../shared/types.ts";
 import type { FloorItem } from "./items.ts";
 import type { Monster } from "./monsters.ts";
+import type { PackItem } from "./inventory.ts";
 import type { RNG } from "./rng.ts";
 
 export interface PlayerStats {
@@ -81,6 +82,9 @@ export class GameState {
 
   // Monsters
   monsters: Monster[] = [];
+
+  // Pack inventory
+  packItems: PackItem[] = [];
 
   // Level storage
   levels: LevelData[] = [];

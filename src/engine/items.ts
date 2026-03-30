@@ -7,6 +7,7 @@ import {
   foodTable, weaponTable, armorTable, potionTable, scrollTable,
   staffTable, ringTable, wandTable, type ItemTableEntry,
 } from "./catalogs/items.ts";
+import { addItemToPack } from "./inventory.ts";
 
 export interface FloorItem {
   x: number;
@@ -202,6 +203,11 @@ export function pickUpItem(state: GameState): FloorItem | null {
   for (const item of state.floorItems) {
     if (!item.collected && item.x === px && item.y === py) {
       item.collected = true;
+
+      // Add non-consumable items to pack for inventory tracking
+      if (item.category !== ItemCategory.GOLD) {
+        addItemToPack(state, item);
+      }
 
       if (item.category === ItemCategory.GOLD) {
         const goldAmount = state.rng.range(5, 30) * state.stats.depthLevel;
