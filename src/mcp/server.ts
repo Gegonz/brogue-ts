@@ -195,6 +195,158 @@ mcpServer.registerTool("brogue_benchmark", {
   };
 });
 
+mcpServer.registerTool("brogue_admin", {
+  description: "Admin/debug console for testing. Set depth, stats, equipment, spawn monsters, toggle god mode. Essential for efficient porting iteration — skip to any depth or scenario instantly.",
+  inputSchema: {
+    command: z.enum([
+      "set_depth",      // Jump to a specific depth (generates new level)
+      "set_stats",      // Set HP, strength, level, etc.
+      "give_weapon",    // Equip a weapon by name
+      "give_armor",     // Equip armor by name
+      "god_mode",       // Toggle invincibility
+      "spawn_monster",  // Spawn a specific monster nearby
+      "reveal_map",     // Discover entire map
+      "heal",           // Full heal + cure poison
+      "info",           // Show detailed game internals
+    ]).describe("Admin command to execute"),
+    value: z.string().optional().describe("Command parameter (e.g., depth number, weapon name, monster name)"),
+  },
+}, async ({ command, value }) => {
+  const eng = getEngine();
+  const state = eng["state"]; // access private state for admin
+  let msg = "";
+
+  switch (command) {
+    case "set_depth": {
+      const depth = parseInt(value ?? "5");
+      state.stats.depthLevel = depth;
+      state.stats.deepestLevel = Math.max(state.stats.deepestLevel, depth);
+      state.stats.turnNumber++;
+      state.initGrids();
+      const { generateDungeon } = await import("../engine/architect.ts");
+      const { populateItems } = await import("../engine/items.ts");
+      const { populateMonsters } = await import("../engine/monsters.ts");
+      const { computeFOV } = await import("../engine/fov.ts");
+      const { updateLighting } = await import("../engine/light.ts");
+      generateDungeon(state);
+      populateItems(state);
+      populateMonsters(state);
+      computeFOV(state);
+      updateLighting(state);
+      state.messages = [];
+      state.addMessage(`[ADMIN] Teleported to depth ${depth}.`);
+      msg = `Jumped to depth ${depth}`;
+      break;
+    }
+    case "set_stats": {
+      // value format: "hp=100 str=20 level=10 xp=200 nutrition=3000"
+      const parts = (value ?? "").split(/\s+/);
+      for (const part of parts) {
+        const [k, v] = part.split("=");
+        const num = parseInt(v ?? "0");
+        if (k === "hp") { state.stats.hp = num; state.stats.maxHp = Math.max(state.stats.maxHp, num); }
+        else if (k === "maxhp") { state.stats.maxHp = num; state.stats.hp = Math.min(state.stats.hp, num); }
+        else if (k === "str") { state.stats.strength = num; state.stats.maxStrength = Math.max(state.stats.maxStrength, num); }
+        else if (k === "level") { state.stats.level = num; }
+        else if (k === "xp") { state.stats.xp = num; }
+        else if (k === "gold") { state.stats.gold = num; }
+        else if (k === "nutrition") { state.stats.nutrition = num; }
+      }
+      msg = `Stats updated: ${value}`;
+      break;
+    }
+    case "give_weapon": {
+      const name = value ?? "war axe";
+      const bonusDmg: Record<string, number> = {
+        "dagger": 2, "sword": 4, "broadsword": 9, "whip": 2, "rapier": 2,
+        "flail": 6, "mace": 9, "war hammer": 15, "spear": 2, "war pike": 7,
+        "axe": 4, "war axe": 7, "javelin": 4,
+      };
+      state.weapon = { name, bonusDamage: bonusDmg[name] ?? 5 };
+      msg = `Equipped ${name} (+${state.weapon.bonusDamage} dmg)`;
+      break;
+    }
+    case "give_armor": {
+      const name = value ?? "plate armor";
+      const armorDef: Record<string, number> = {
+        "leather armor": 3, "scale mail": 4, "chain mail": 5,
+        "banded mail": 7, "splint mail": 9, "plate armor": 11,
+      };
+      state.armor = { name, defense: armorDef[name] ?? 5 };
+      msg = `Equipped ${name} (+${state.armor.defense} def)`;
+      break;
+    }
+    case "god_mode": {
+      state.stats.hp = 9999;
+      state.stats.maxHp = 9999;
+      state.stats.strength = 50;
+      state.stats.maxStrength = 50;
+      state.stats.nutrition = 99999;
+      msg = "God mode: 9999 HP, 50 Str, infinite nutrition";
+      break;
+    }
+    case "spawn_monster": {
+      const name = (value ?? "rat").toLowerCase();
+      const { monsterCatalog } = await import("../engine/catalogs/monsters.ts");
+      const idx = monsterCatalog.findIndex(m => m.name.toLowerCase() === name);
+      if (idx >= 0) {
+        const entry = monsterCatalog[idx]!;
+        const mx = state.playerPos.x + 2;
+        const my = state.playerPos.y;
+        state.monsters.push({
+          x: mx, y: my, catalogIndex: idx,
+          name: entry.name, displayChar: entry.displayChar,
+          foreColor: [...entry.foreColor] as [number,number,number],
+          hp: entry.maxHP, maxHp: entry.maxHP,
+          defense: entry.defense, accuracy: entry.accuracy,
+          damage: { ...entry.damage }, moveSpeed: entry.moveSpeed,
+          attackSpeed: entry.attackSpeed,
+          xpValue: Math.max(1, Math.floor((entry.maxHP + (entry.damage.min+entry.damage.max)/2*3 + entry.defense/5) / 5)),
+          dead: false, flags: [...entry.flags],
+        });
+        msg = `Spawned ${entry.name} (${entry.maxHP} HP) at (${mx},${my})`;
+      } else {
+        msg = `Unknown monster: ${name}. Available: ${monsterCatalog.slice(1,20).map(m=>m.name).join(", ")}...`;
+      }
+      break;
+    }
+    case "reveal_map": {
+      const { DCOLS, DROWS } = await import("../shared/constants.ts");
+      for (let x = 0; x < DCOLS; x++) {
+        for (let y = 0; y < DROWS; y++) {
+          state.pmap[x]![y]!.flags |= 0x1; // DISCOVERED
+        }
+      }
+      msg = "Entire map revealed";
+      break;
+    }
+    case "heal": {
+      state.stats.hp = state.stats.maxHp;
+      state.poisonAmount = 0;
+      if (state.statuses) state.statuses.fill(0);
+      msg = `Healed to ${state.stats.hp}/${state.stats.maxHp}, cleared all status effects`;
+      break;
+    }
+    case "info": {
+      const monsterSummary = state.monsters.filter((m: {dead: boolean}) => !m.dead)
+        .map((m: {name: string; hp: number; maxHp: number; x: number; y: number}) => `${m.name}(${m.hp}/${m.maxHp} @${m.x},${m.y})`)
+        .join(", ");
+      msg = `Depth=${state.stats.depthLevel} Turn=${state.stats.turnNumber} ` +
+        `HP=${state.stats.hp}/${state.stats.maxHp} Str=${state.stats.strength} ` +
+        `Lv=${state.stats.level} XP=${state.stats.xp} Nutr=${state.stats.nutrition} ` +
+        `Weapon=${state.weapon?.name ?? "none"} Armor=${state.armor?.name ?? "none"} ` +
+        `Monsters: ${monsterSummary || "none"} ` +
+        `Items: ${state.floorItems.filter((i: {collected: boolean}) => !i.collected).length} uncollected`;
+      break;
+    }
+  }
+
+  state.addMessage(`[ADMIN] ${msg}`);
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify({ message: msg, state: eng.getState() }, null, 2) }],
+  };
+});
+
 // Shared transport — same pattern as Augur
 // SDK workaround: bypass validation + reset on re-initialize for Claude Code reconnects
 interface TransportInternals {
