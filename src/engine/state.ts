@@ -88,6 +88,11 @@ export class GameState {
   // RNG
   rng!: RNG;
 
+  // Status effects
+  statuses: number[] = [];
+  maxStatuses: number[] = [];
+  poisonAmount = 0;
+
   // Game lifecycle
   gameOver = false;
   victory = false;

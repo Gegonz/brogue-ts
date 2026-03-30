@@ -3,6 +3,7 @@
 
 import type { GameState } from "./state.ts";
 import type { Monster } from "./monsters.ts";
+import { applyPoison } from "./time.ts";
 
 const FP_FACTOR = 65536;
 
@@ -198,6 +199,17 @@ export function monsterAttackPlayer(state: GameState, monster: Monster): void {
 
   state.stats.hp = result.newHP;
   state.addMessage(result.message);
+
+  // Monster special effects on hit
+  if (result.hit && result.damage > 0 && !result.killed) {
+    if (monster.flags.includes("poisons")) {
+      applyPoison(state, result.damage);
+    }
+    if (monster.flags.includes("weakens")) {
+      state.stats.strength = Math.max(1, state.stats.strength - 1);
+      state.addMessage("You feel weakened!");
+    }
+  }
 
   if (result.killed) {
     state.stats.hp = 0;
