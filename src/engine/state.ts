@@ -16,6 +16,8 @@ export interface PlayerStats {
   turnNumber: number;
   monstersKilled: number;
   deepestLevel: number;
+  xp: number;
+  level: number;
 }
 
 export class GameState {
@@ -50,6 +52,8 @@ export class GameState {
     turnNumber: 0,
     monstersKilled: 0,
     deepestLevel: 1,
+    xp: 0,
+    level: 1,
   };
 
   // Messages

@@ -131,7 +131,20 @@ export function playerAttacksMonster(state: GameState, monster: Monster): boolea
   if (monster.hp <= 0) {
     monster.dead = true;
     state.stats.monstersKilled++;
-    state.addMessage(`You kill the ${monster.name}! (${actualDamage} damage)`);
+    state.stats.xp += monster.xpValue;
+    state.addMessage(`You kill the ${monster.name}! (${actualDamage} damage, +${monster.xpValue} XP)`);
+
+    // Level up check: 20 XP per level
+    const xpPerLevel = 20;
+    const newLevel = Math.floor(state.stats.xp / xpPerLevel) + 1;
+    if (newLevel > state.stats.level) {
+      state.stats.level = newLevel;
+      state.stats.maxHp += 5;
+      state.stats.hp = Math.min(state.stats.hp + 5, state.stats.maxHp);
+      state.stats.strength++;
+      state.stats.maxStrength++;
+      state.addMessage(`*** LEVEL UP! *** Level ${newLevel}! (+5 HP, +1 Str)`);
+    }
   } else {
     state.addMessage(`You hit the ${monster.name} for ${actualDamage} damage. (${monster.hp}/${monster.maxHp} HP)`);
   }

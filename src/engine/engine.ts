@@ -156,6 +156,8 @@ export interface GameStateSnapshot {
     seed: number;
     monstersKilled: number;
     deepestLevel: number;
+    xp: number;
+    level: number;
     weapon: string | null;
     armor: string | null;
     x: number; y: number;
@@ -352,6 +354,8 @@ export class GameEngine {
         seed: Number(s.seed),
         monstersKilled: s.monstersKilled,
         deepestLevel: s.deepestLevel,
+        xp: s.xp,
+        level: s.level,
         weapon: this.state.weapon?.name ?? null,
         armor: this.state.armor?.name ?? null,
         x: this.state.playerPos.x,
@@ -530,9 +534,9 @@ export class GameEngine {
     const stats = this.state.stats;
 
     const sidebarLines: Array<{ text: string; color: [number, number, number] }> = [
-      { text: `Depth: ${stats.depthLevel}`, color: [100, 100, 100] },
+      { text: `D:${stats.depthLevel} Lv:${stats.level}`, color: [100, 100, 100] },
       { text: `HP: ${stats.hp}/${stats.maxHp}`, color: stats.hp > stats.maxHp / 2 ? [0, 100, 0] : stats.hp > stats.maxHp / 4 ? [100, 100, 0] : [100, 0, 0] },
-      { text: `Str: ${stats.strength}`, color: [80, 60, 30] },
+      { text: `Str:${stats.strength} XP:${stats.xp}`, color: [80, 60, 30] },
       { text: `Gold: ${stats.gold}`, color: [100, 85, 0] },
       { text: `${stats.nutrition}`, color: stats.nutrition > 300 ? [60, 40, 0] : [100, 0, 0] },
       { text: `Kills: ${stats.monstersKilled}`, color: [70, 20, 20] },
