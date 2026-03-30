@@ -47,7 +47,7 @@ export class GameState {
     maxHp: 30,
     strength: 12,
     maxStrength: 12,
-    nutrition: 1800,
+    nutrition: 2500,
     seed: 0n,
     turnNumber: 0,
     monstersKilled: 0,

@@ -77,15 +77,22 @@ export function populateItems(state: GameState): void {
 
   state.floorItems = [];
 
-  // Guarantee 1 weapon on depth 1, and 1 weapon or armor on deeper levels
+  // Guarantee essential items per level
   const guaranteed: number[] = [];
+  // Always guarantee 1 food ration
+  guaranteed.push(0); // food
+  // Guarantee weapon on D1, weapon or armor on deeper
   if (depth === 1) {
     guaranteed.push(3); // weapon
   } else {
     guaranteed.push(rng.percent(60) ? 3 : 4); // weapon or armor
   }
   if (depth >= 2 && rng.percent(50)) {
-    guaranteed.push(4); // bonus armor chance on deeper levels
+    guaranteed.push(4); // bonus armor chance
+  }
+  // Extra food on deeper levels (longer exploration)
+  if (depth >= 3 && rng.percent(60)) {
+    guaranteed.push(0); // second food
   }
 
   for (const forcedTemplate of guaranteed) {

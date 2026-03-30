@@ -55,8 +55,8 @@ export function tryEatFood(state: GameState): boolean {
   for (const item of state.floorItems) {
     if (!item.collected && item.x === px && item.y === py && item.category === ItemCategory.FOOD) {
       item.collected = true;
-      const restored = 1600; // Standard ration restores ~1600 nutrition
-      state.stats.nutrition = Math.min(state.stats.nutrition + restored, 2150); // STOMACH_SIZE
+      const restored = 2000; // Standard ration restores nutrition
+      state.stats.nutrition = Math.min(state.stats.nutrition + restored, 3000); // STOMACH_SIZE
       state.addMessage("You eat the food. Delicious!");
       return true;
     }
