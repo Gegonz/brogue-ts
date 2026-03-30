@@ -58,8 +58,8 @@ Claude edits code → server auto-reloads → test via MCP tools or browser. Nev
 | Light.c | 412 | engine/fov.ts, engine/light.ts | Done (FOV, getFOVMask, paintLight, updateLighting, miner's light. Skipped: flares, creature lights) |
 | Movement.c | 1800 | engine/movement.ts | Partial (basic move, door open, stair detection, auto-explore via Dijkstra. No combat, terrain effects) |
 | Items.c | 8040 | engine/items.ts | Partial (floor item spawn, display, gold pickup. No inventory, identification, usage) |
-| Monsters.c | 4826 | engine/monsters.ts | Partial (spawn, display, 10 monster types. No AI movement) |
-| Combat.c | 1784 | engine/combat.ts | Partial (bump-attack, monster retaliation, death, damage messages. In monsters.ts) |
+| Monsters.c | 4826 | engine/monsters.ts | Partial (spawn, 10 types, chase AI, wander, death. No pathfinding AI, specials) |
+| Combat.c | 1784 | engine/combat.ts | Partial (bump-attack, retaliation, auto-fight, kill tracking. In monsters.ts) |
 | Time.c | 2640 | engine/time.ts | Partial (HP regen every 15 turns, nutrition drain 1/turn, hunger warnings, starvation death, food consumption) |
 | IO.c | 5128 | client/renderer.ts | Simplified (basic plotChar) |
 | RogueMain.c | 1400 | engine/game.ts | Simplified (minimal loop) |

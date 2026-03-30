@@ -193,22 +193,17 @@ export class GameEngine {
   /** Common end-of-turn processing */
   private endTurn(): void {
     processTurnEffects(this.state);
+    if (this.state.gameOver && !this.state.victory) {
+      this.state.addMessage(`--- GAME OVER --- Depth ${this.state.stats.deepestLevel}, ${this.state.stats.turnNumber} turns, ${this.state.stats.monstersKilled} kills, ${this.state.stats.gold} gold. Press any key to restart.`);
+    }
     this.updateDisplay();
     this.emit("displayChanged");
   }
 
   handleKeystroke(key: number, _ctrl = false, _shift = false): void {
     if (this.state.gameOver) {
-      // On any keypress after death, show death summary
-      this.state.messages = [
-        `--- GAME OVER ---`,
-        `Killed on depth ${this.state.stats.depthLevel} after ${this.state.stats.turnNumber} turns.`,
-        `Deepest level: ${this.state.stats.deepestLevel}`,
-        `Monsters killed: ${this.state.stats.monstersKilled}`,
-        `Gold collected: ${this.state.stats.gold}`,
-      ];
-      this.updateDisplay();
-      this.emit("displayChanged");
+      // Any keypress after death restarts the game
+      this.newGame();
       return;
     }
 
