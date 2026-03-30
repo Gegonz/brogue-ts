@@ -159,6 +159,35 @@ export function processMonsterTurns(state: GameState): void {
       continue;
     }
 
+    // Flee at low HP (wraiths, vampires, bog monsters)
+    if (monster.flags.includes("flees_low_hp") && monster.hp < monster.maxHp / 4 && monsterCanSeePlayer(state, monster)) {
+      // Run AWAY from player
+      const fleeX = Math.sign(monster.x - px);
+      const fleeY = Math.sign(monster.y - py);
+      const fleeMoves: [number, number][] = [[fleeX, fleeY], [fleeX, 0], [0, fleeY]];
+      for (const [mx, my] of fleeMoves) {
+        if (mx === 0 && my === 0) continue;
+        const nx = monster.x + mx;
+        const ny = monster.y + my;
+        if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS
+          && isPassableTile(state.pmap[nx]![ny]!.layers[0]!)
+          && !(nx === px && ny === py)
+          && !state.monsters.some(m => !m.dead && m !== monster && m.x === nx && m.y === ny)) {
+          monster.x = nx;
+          monster.y = ny;
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Ranged attackers: maintain distance (dar priestesses, centaurs)
+    if (monster.flags.includes("ranged") && monsterCanSeePlayer(state, monster) && dx + dy <= 8 && dx + dy > 2) {
+      // Stay at range — don't chase, just attack from distance
+      // (simplified: they just don't move when in range)
+      continue;
+    }
+
     // Can see player: chase
     if (monsterCanSeePlayer(state, monster)) {
       const stepX = Math.sign(px - monster.x);
