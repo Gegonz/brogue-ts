@@ -150,6 +150,13 @@ export function processMonsterTurns(state: GameState): void {
     // Skip immobile monsters
     if (monster.flags.includes("immobile") || monster.flags.includes("inanimate")) continue;
 
+    // Speed system: fast monsters (speed 50) act twice, slow (200) act every other turn
+    const speed = monster.moveSpeed || 100;
+    if (speed >= 200 && state.stats.turnNumber % 2 !== 0) continue; // slow: skip odd turns
+    const numActions = speed <= 50 ? 2 : 1; // fast: 2 actions
+
+    for (let action = 0; action < numActions && !monster.dead && !state.gameOver; action++) {
+
     const dx = Math.abs(monster.x - px);
     const dy = Math.abs(monster.y - py);
 
@@ -235,5 +242,6 @@ export function processMonsterTurns(state: GameState): void {
         }
       }
     }
+    } // end action loop
   }
 }
