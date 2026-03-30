@@ -76,7 +76,7 @@ export class GameState {
   floorItems: FloorItem[] = [];
 
   // Equipment (auto-equipped on pickup)
-  weapon: { name: string; bonusDamage: number } | null = null;
+  weapon: { name: string; bonusDamage: number; damage: { min: number; max: number; clump: number } } | null = null;
   armor: { name: string; defense: number } | null = null;
 
   // Monsters

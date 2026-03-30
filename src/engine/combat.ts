@@ -139,7 +139,7 @@ export function resolveAttack(
 export function playerAttackMonster(state: GameState, monster: Monster): boolean {
   const pAcc = playerAccuracy(state);
   const weaponDmg = state.weapon
-    ? { min: 1, max: 3 + state.weapon.bonusDamage * 2, clump: 1 }
+    ? { ...state.weapon.damage }
     : { min: 1, max: 3 + Math.max(0, state.stats.strength - 10), clump: 1 };
 
   const result = resolveAttack(

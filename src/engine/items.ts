@@ -229,11 +229,12 @@ export function pickUpItem(state: GameState): FloorItem | null {
       } else if (item.category === ItemCategory.WEAPON) {
         const table = weaponTable;
         const entry = table[item.kind];
-        const dmgRange = entry ? entry.range : { lowerBound: 3, upperBound: 5 };
+        const dmgRange = entry ? entry.range : { lowerBound: 3, upperBound: 5, clumpFactor: 1 };
         const bonusDamage = Math.floor((dmgRange.lowerBound + dmgRange.upperBound) / 4) + item.enchantment;
         if (!state.weapon || bonusDamage > state.weapon.bonusDamage) {
           const old = state.weapon;
-          state.weapon = { name: item.name, bonusDamage };
+          const weapDmg = { min: dmgRange.lowerBound, max: dmgRange.upperBound, clump: dmgRange.clumpFactor || 1 };
+          state.weapon = { name: item.name, bonusDamage, damage: weapDmg };
           state.addMessage(old ? `You swap your ${old.name} for ${item.name}. (+${bonusDamage} dmg)` : `You equip ${item.name}. (+${bonusDamage} dmg)`);
         } else {
           state.addMessage(`You see ${item.name} but your ${state.weapon.name} is better.`);

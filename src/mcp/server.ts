@@ -259,13 +259,16 @@ mcpServer.registerTool("brogue_admin", {
     }
     case "give_weapon": {
       const name = value ?? "war axe";
-      const bonusDmg: Record<string, number> = {
-        "dagger": 2, "sword": 4, "broadsword": 9, "whip": 2, "rapier": 2,
-        "flail": 6, "mace": 9, "war hammer": 15, "spear": 2, "war pike": 7,
-        "axe": 4, "war axe": 7, "javelin": 4,
+      const { weaponTable } = await import("../engine/catalogs/items.ts");
+      const wEntry = weaponTable.find(w => w.name === name);
+      const dmgRange = wEntry ? wEntry.range : { lowerBound: 7, upperBound: 9, clumpFactor: 1 };
+      const bonus = Math.floor((dmgRange.lowerBound + dmgRange.upperBound) / 4);
+      state.weapon = {
+        name,
+        bonusDamage: bonus,
+        damage: { min: dmgRange.lowerBound, max: dmgRange.upperBound, clump: dmgRange.clumpFactor },
       };
-      state.weapon = { name, bonusDamage: bonusDmg[name] ?? 5 };
-      msg = `Equipped ${name} (+${state.weapon.bonusDamage} dmg)`;
+      msg = `Equipped ${name} (${dmgRange.lowerBound}-${dmgRange.upperBound} dmg)`;
       break;
     }
     case "give_armor": {
