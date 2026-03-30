@@ -18,6 +18,9 @@ export interface FloorItem {
   foreColor: [number, number, number];
   name: string;
   enchantment: number;  // +1, +2, etc. for weapons/armor/rings
+  charges: number;      // staff/wand charges, throwing weapon quantity
+  cursed: boolean;
+  itemFlags: string[];  // weapon special flags (sneak_bonus, staggers, etc.)
   collected: boolean;
 }
 
@@ -92,27 +95,129 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
   return null;
 }
 
-function generateItem(category: ItemCategory, rng: { range: (a: number, b: number) => number }, depth: number): { kind: number; name: string; enchantment: number } {
+/**
+ * Generate an item — faithful port of BrogueCE makeItemInto().
+ * Sets enchantment, charges, cursed status, weapon flags.
+ */
+function generateItem(
+  category: ItemCategory,
+  rng: { range: (a: number, b: number) => number; percent: (p: number) => boolean; clumpedRange: (a: number, b: number, c: number) => number },
+  _depth: number,
+): { kind: number; name: string; enchantment: number; charges: number; cursed: boolean; flags: string[] } {
   const table = getTable(category);
   if (table.length === 0) {
-    return { kind: 0, name: category === ItemCategory.GOLD ? "gold pieces" : "unknown item", enchantment: 0 };
+    return { kind: 0, name: category === ItemCategory.GOLD ? "gold pieces" : "unknown item", enchantment: 0, charges: 0, cursed: false, flags: [] };
   }
 
   const kind = chooseKind(table, rng);
   const entry = table[kind]!;
-
-  // Enchantment for weapons/armor/rings (depth-based)
   let enchantment = 0;
-  if (category === ItemCategory.WEAPON || category === ItemCategory.ARMOR || category === ItemCategory.RING) {
-    enchantment = rng.range(0, Math.min(3, Math.floor(depth / 4)));
-    if (rng.range(0, 9) === 0) enchantment = -1; // cursed (10% chance)
+  let charges = 0;
+  let cursed = false;
+  const flags: string[] = [];
+
+  switch (category) {
+    case ItemCategory.FOOD:
+      // Food is always identified
+      break;
+
+    case ItemCategory.WEAPON: {
+      // 40% chance of enchantment (matching BrogueCE)
+      if (rng.percent(40)) {
+        enchantment += rng.range(1, 3);
+        if (rng.percent(50)) {
+          enchantment *= -1;
+          cursed = true;
+        } else {
+          // Chance for extra enchantment
+          while (rng.percent(10)) enchantment++;
+        }
+      }
+      // Weapon-specific flags (from BrogueCE makeItemInto)
+      const weaponFlags: Record<string, string[]> = {
+        "dagger": ["sneak_bonus"],
+        "mace": ["staggers"], "war hammer": ["staggers"],
+        "whip": ["extends"],
+        "rapier": ["quick", "lunge"],
+        "flail": ["pass_attacks"],
+        "spear": ["penetrates"], "war pike": ["penetrates"],
+        "axe": ["hits_all_adjacent"], "war axe": ["hits_all_adjacent"],
+        "dart": ["throwing"], "incendiary dart": ["throwing", "fiery"],
+        "javelin": ["throwing"],
+      };
+      flags.push(...(weaponFlags[entry.name] ?? []));
+      // Throwing weapons: set quantity, no enchant/cursed
+      if (flags.includes("throwing")) {
+        enchantment = 0;
+        cursed = false;
+        charges = entry.name === "incendiary dart" ? rng.range(3, 6) : rng.range(5, 18);
+      }
+      break;
+    }
+
+    case ItemCategory.ARMOR:
+      // 40% chance of enchantment (matching BrogueCE)
+      if (rng.percent(40)) {
+        enchantment += rng.range(1, 3);
+        if (rng.percent(50)) {
+          enchantment *= -1;
+          cursed = true;
+        } else {
+          while (rng.percent(10)) enchantment++;
+        }
+      }
+      break;
+
+    case ItemCategory.STAFF:
+      // Charges: 2 base, 50% +1, 15% of that +1, 10% each additional
+      charges = 2;
+      if (rng.percent(50)) {
+        charges++;
+        if (rng.percent(15)) {
+          charges++;
+          while (rng.percent(10)) charges++;
+        }
+      }
+      enchantment = charges; // staff enchant = charges
+      break;
+
+    case ItemCategory.WAND:
+      // Charges from catalog range
+      charges = rng.clumpedRange(entry.range.lowerBound, entry.range.upperBound, entry.range.clumpFactor || 1);
+      break;
+
+    case ItemCategory.RING:
+      // Enchant from catalog range
+      enchantment = rng.clumpedRange(entry.range.lowerBound, entry.range.upperBound, entry.range.clumpFactor || 1);
+      if (rng.percent(16)) {
+        enchantment *= -1;
+        cursed = true;
+      } else {
+        while (rng.percent(10)) enchantment++;
+      }
+      break;
+
+    case ItemCategory.SCROLL:
+    case ItemCategory.POTION:
+      // No enchantment for consumables
+      break;
+
+    default:
+      break;
   }
 
+  // Build display name
   let name = entry.name;
-  if (enchantment > 0) name = `+${enchantment} ${name}`;
-  else if (enchantment < 0) name = `${enchantment} ${name}`;
+  if (enchantment > 0 && (category === ItemCategory.WEAPON || category === ItemCategory.ARMOR || category === ItemCategory.RING)) {
+    name = `+${enchantment} ${name}`;
+  } else if (enchantment < 0) {
+    name = `${enchantment} ${name}`;
+  }
+  if (cursed && enchantment >= 0) {
+    name = `cursed ${name}`;
+  }
 
-  return { kind, name, enchantment };
+  return { kind, name, enchantment, charges, cursed, flags };
 }
 
 /**
@@ -150,7 +255,8 @@ export function populateItems(state: GameState): void {
       x: loc.x, y: loc.y,
       category: cat, kind: gen.kind,
       displayChar: display.char, foreColor: [...display.color],
-      name: gen.name, enchantment: gen.enchantment, collected: false,
+      name: gen.name, enchantment: gen.enchantment, charges: gen.charges,
+      cursed: gen.cursed, itemFlags: gen.flags, collected: false,
     });
   }
 
@@ -188,7 +294,8 @@ export function populateItems(state: GameState): void {
       x: loc.x, y: loc.y,
       category: cat, kind: gen.kind,
       displayChar: display.char, foreColor: [...display.color],
-      name: gen.name, enchantment: gen.enchantment, collected: false,
+      name: gen.name, enchantment: gen.enchantment, charges: gen.charges,
+      cursed: gen.cursed, itemFlags: gen.flags, collected: false,
     });
   }
 }
