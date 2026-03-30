@@ -16,9 +16,70 @@ import { nbDirs } from "../shared/constants.ts";
 
 type EventCallback = (...args: unknown[]) => void;
 
+function findNearestItem(state: GameState): { dx: number; dy: number } | null {
+  const px = state.playerPos.x;
+  const py = state.playerPos.y;
+
+  // Find uncollected items in discovered cells
+  const targets: { x: number; y: number }[] = [];
+  for (const item of state.floorItems) {
+    if (item.collected) continue;
+    if (!(state.pmap[item.x]![item.y]!.flags & 0x1)) continue; // not discovered
+    targets.push({ x: item.x, y: item.y });
+  }
+  if (targets.length === 0) return null;
+
+  // Build cost map
+  const costMap = allocGrid();
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      const tile = state.pmap[x]![y]!.layers[0]!;
+      if ((tile >= 2 && tile <= 5) || tile === 7 || tile === 8 || tile === 12 || tile === 13) {
+        costMap[x]![y] = 1;
+      } else {
+        costMap[x]![y] = -2;
+      }
+    }
+  }
+
+  // Set item locations as distance-0 targets
+  const distMap = allocGrid();
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      distMap[x]![y] = 30000;
+    }
+  }
+  for (const t of targets) {
+    distMap[t.x]![t.y] = 0;
+  }
+
+  dijkstraScan(distMap, costMap, true);
+
+  // Find best step
+  let bestDx = 0, bestDy = 0, bestDist = distMap[px]![py]!;
+  for (let dir = 0; dir < 8; dir++) {
+    const nx = px + nbDirs[dir]![0]!;
+    const ny = py + nbDirs[dir]![1]!;
+    if (nx >= 0 && nx < DCOLS && ny >= 0 && ny < DROWS) {
+      const d = distMap[nx]![ny]!;
+      if (d < bestDist) {
+        bestDist = d;
+        bestDx = nbDirs[dir]![0]!;
+        bestDy = nbDirs[dir]![1]!;
+      }
+    }
+  }
+
+  return (bestDx === 0 && bestDy === 0) ? null : { dx: bestDx, dy: bestDy };
+}
+
 function autoExploreStep(state: GameState): { dx: number; dy: number } | null {
   const px = state.playerPos.x;
   const py = state.playerPos.y;
+
+  // Priority 1: walk to nearby uncollected items (within discovered area)
+  const nearestItem = findNearestItem(state);
+  if (nearestItem) return nearestItem;
 
   const costMap = allocGrid();
   for (let x = 0; x < DCOLS; x++) {
