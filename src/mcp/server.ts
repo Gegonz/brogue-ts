@@ -279,10 +279,17 @@ mcpServer.registerTool("brogue_admin", {
       const wEntry = weaponTable.find(w => w.name === name);
       const dmgRange = wEntry ? wEntry.range : { lowerBound: 7, upperBound: 9, clumpFactor: 1 };
       const bonus = Math.floor((dmgRange.lowerBound + dmgRange.upperBound) / 4);
+      const weapFlags: Record<string, string[]> = {
+        "dagger": ["sneak_bonus"], "mace": ["staggers"], "war hammer": ["staggers"],
+        "whip": ["extends"], "rapier": ["quick","lunge"], "flail": ["pass_attacks"],
+        "spear": ["penetrates"], "war pike": ["penetrates"],
+        "axe": ["hits_all_adjacent"], "war axe": ["hits_all_adjacent"],
+      };
       state.weapon = {
         name,
         bonusDamage: bonus,
         damage: { min: dmgRange.lowerBound, max: dmgRange.upperBound, clump: dmgRange.clumpFactor },
+        flags: weapFlags[name] ?? [],
       };
       msg = `Equipped ${name} (${dmgRange.lowerBound}-${dmgRange.upperBound} dmg)`;
       break;

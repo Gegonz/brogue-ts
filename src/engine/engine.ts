@@ -293,6 +293,17 @@ export class GameEngine {
 
       if (monster) {
         playerAttacksMonster(this.state, monster);
+        // Axe/war axe: also hit all other adjacent monsters
+        if (this.state.weapon?.flags.includes("hits_all_adjacent")) {
+          const px = this.state.playerPos.x;
+          const py = this.state.playerPos.y;
+          for (const m of this.state.monsters) {
+            if (m.dead || m === monster) continue;
+            if (Math.abs(m.x - px) <= 1 && Math.abs(m.y - py) <= 1 && (Math.abs(m.x - px) + Math.abs(m.y - py) > 0)) {
+              playerAttacksMonster(this.state, m);
+            }
+          }
+        }
         this.state.stats.turnNumber++;
         processMonsterTurns(this.state);
         this.endTurn();

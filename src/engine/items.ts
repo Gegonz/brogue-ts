@@ -347,7 +347,7 @@ export function pickUpItem(state: GameState): FloorItem | null {
         if (!state.weapon || bonusDamage > state.weapon.bonusDamage) {
           const old = state.weapon;
           const weapDmg = { min: dmgRange.lowerBound, max: dmgRange.upperBound, clump: dmgRange.clumpFactor || 1 };
-          state.weapon = { name: item.name, bonusDamage, damage: weapDmg };
+          state.weapon = { name: item.name, bonusDamage, damage: weapDmg, flags: item.itemFlags ?? [] };
           state.addMessage(old ? `You swap your ${old.name} for ${item.name}. (+${bonusDamage} dmg)` : `You equip ${item.name}. (+${bonusDamage} dmg)`);
         } else {
           state.addMessage(`You see ${item.name} but your ${state.weapon.name} is better.`);
