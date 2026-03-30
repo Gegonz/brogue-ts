@@ -566,6 +566,91 @@ function finishWalls(state: GameState): void {
 }
 
 // ---------------------------------------------------------------------------
+// Lake generation (water/lava pools)
+// ---------------------------------------------------------------------------
+
+// Tile indices for liquid terrain (matching expanded tileCatalog)
+const DEEP_WATER = 42;
+const SHALLOW_WATER = 43;
+const LAVA = 49;
+const CHASM = 45;
+const CHASM_EDGE = 46;
+
+function placeLakes(grid: Grid, depth: number, rng: RNG): void {
+  // No lakes on depth 1
+  if (depth <= 1) return;
+
+  // Chance of lakes increases with depth
+  const lakeChance = Math.min(80, 20 + depth * 5);
+  if (!rng.percent(lakeChance)) return;
+
+  // Choose liquid type based on depth
+  let liquidTile: number;
+  let shallowTile: number;
+  if (depth >= 8 && rng.percent(40)) {
+    liquidTile = LAVA;
+    shallowTile = LAVA; // lava has no shallow variant
+  } else if (depth >= 12 && rng.percent(30)) {
+    liquidTile = CHASM;
+    shallowTile = CHASM_EDGE;
+  } else {
+    liquidTile = DEEP_WATER;
+    shallowTile = SHALLOW_WATER;
+  }
+
+  // Generate a blob-shaped lake
+  const lakeGrid = allocGrid();
+  const birth = [false, false, false, false, false, true, true, true, true];
+  const survival = [false, false, false, false, true, true, true, true, true];
+  const blob = createBlobOnGrid(
+    lakeGrid, 4,
+    5, 3, Math.min(20, 8 + depth), Math.min(12, 4 + depth),
+    55, birth, survival,
+    () => rng.range(0, 99),
+  );
+
+  // Position lake randomly on the map, avoiding the first room area
+  const offsetX = rng.range(5, DCOLS - blob.width - 5);
+  const offsetY = rng.range(3, DROWS - blob.height - 3);
+
+  // Place lake tiles on the grid — only replace floor (value 1) cells
+  // Don't overwrite corridors, doors, or walls
+  let placed = 0;
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      const lx = x - offsetX + blob.minX;
+      const ly = y - offsetY + blob.minY;
+      if (lx >= 0 && lx < DCOLS && ly >= 0 && ly < DROWS && lakeGrid[lx]![ly]) {
+        if (grid[x]![y] === 1) { // only replace floor
+          // Use value 3 to mark lake cells (will be converted to liquid tile in pmap)
+          grid[x]![y] = 10 + liquidTile; // encode liquid type: 10+tileIndex
+          placed++;
+        }
+      }
+    }
+  }
+
+  // Add shallow border around the lake
+  if (placed > 0 && shallowTile !== liquidTile) {
+    for (let x = 1; x < DCOLS - 1; x++) {
+      for (let y = 1; y < DROWS - 1; y++) {
+        if (grid[x]![y] === 1) { // floor cell
+          // Check if adjacent to a lake cell
+          for (let dir = 0; dir < 4; dir++) {
+            const nx = x + nbDirs[dir]![0]!;
+            const ny = y + nbDirs[dir]![1]!;
+            if (coordinatesAreInMap(nx, ny) && grid[nx]![ny]! >= 10) {
+              grid[x]![y] = 10 + shallowTile;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -624,6 +709,9 @@ export function generateDungeon(state: GameState): void {
   // Attach additional rooms
   attachRooms(grid, mainDP, 35, 35, rng);
 
+  // Place lakes (water/lava) on deeper levels
+  placeLakes(grid, state.stats.depthLevel, rng);
+
   // -----------------------------------------------------------------------
   // Translate grid into pmap
   // -----------------------------------------------------------------------
@@ -645,6 +733,9 @@ export function generateDungeon(state: GameState): void {
         state.pmap[x]![y]!.layers[0] = DOOR;
         lastFloorX = x;
         lastFloorY = y;
+      } else if (val >= 10) {
+        // Lake/liquid tile (encoded as 10 + tileIndex)
+        state.pmap[x]![y]!.layers[0] = val - 10;
       }
     }
   }
