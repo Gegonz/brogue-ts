@@ -241,6 +241,10 @@ export class GameEngine {
     this.state.stats.seed = this.state.rng.seed;
     this.state.initGrids();
 
+    // Shuffle item flavors (unidentified appearances) for this seed
+    const { shuffleFlavors } = require("./catalogs/flavors.ts") as typeof import("./catalogs/flavors.ts");
+    shuffleFlavors(this.state.rng);
+
     // Generate the first dungeon level
     generateDungeon(this.state);
     populateItems(this.state);
