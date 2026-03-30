@@ -14,6 +14,8 @@ export interface PlayerStats {
   nutrition: number;
   seed: bigint;
   turnNumber: number;
+  monstersKilled: number;
+  deepestLevel: number;
 }
 
 export class GameState {
@@ -46,6 +48,8 @@ export class GameState {
     nutrition: 1800,
     seed: 0n,
     turnNumber: 0,
+    monstersKilled: 0,
+    deepestLevel: 1,
   };
 
   // Messages

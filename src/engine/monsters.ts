@@ -129,6 +129,7 @@ export function playerAttacksMonster(state: GameState, monster: Monster): boolea
 
   if (monster.hp <= 0) {
     monster.dead = true;
+    state.stats.monstersKilled++;
     state.addMessage(`You kill the ${monster.name}! (${actualDamage} damage)`);
   } else {
     state.addMessage(`You hit the ${monster.name} for ${actualDamage} damage. (${monster.hp}/${monster.maxHp} HP)`);

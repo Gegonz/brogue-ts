@@ -154,6 +154,8 @@ export interface GameStateSnapshot {
     gold: number; nutrition: number;
     depthLevel: number; turnNumber: number;
     seed: number;
+    monstersKilled: number;
+    deepestLevel: number;
     x: number; y: number;
   };
   messages: string[];
@@ -196,7 +198,19 @@ export class GameEngine {
   }
 
   handleKeystroke(key: number, _ctrl = false, _shift = false): void {
-    if (this.state.gameOver) return;
+    if (this.state.gameOver) {
+      // On any keypress after death, show death summary
+      this.state.messages = [
+        `--- GAME OVER ---`,
+        `Killed on depth ${this.state.stats.depthLevel} after ${this.state.stats.turnNumber} turns.`,
+        `Deepest level: ${this.state.stats.deepestLevel}`,
+        `Monsters killed: ${this.state.stats.monstersKilled}`,
+        `Gold collected: ${this.state.stats.gold}`,
+      ];
+      this.updateDisplay();
+      this.emit("displayChanged");
+      return;
+    }
 
     const ch = String.fromCharCode(key);
 
@@ -301,6 +315,7 @@ export class GameEngine {
       const tile = this.state.pmap[px]![py]!.layers[0]!;
       if (tile === 12) { // DOWN_STAIRS
         this.state.stats.depthLevel++;
+        this.state.stats.deepestLevel = Math.max(this.state.stats.deepestLevel, this.state.stats.depthLevel);
         this.state.stats.turnNumber++;
         this.state.initGrids();
         generateDungeon(this.state);
@@ -338,6 +353,8 @@ export class GameEngine {
         gold: s.gold, nutrition: s.nutrition,
         depthLevel: s.depthLevel, turnNumber: s.turnNumber,
         seed: Number(s.seed),
+        monstersKilled: s.monstersKilled,
+        deepestLevel: s.deepestLevel,
         x: this.state.playerPos.x,
         y: this.state.playerPos.y,
       },
