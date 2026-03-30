@@ -609,21 +609,32 @@ function placeLakes(grid: Grid, depth: number, rng: RNG): void {
     () => rng.range(0, 99),
   );
 
-  // Position lake randomly on the map, avoiding the first room area
-  const offsetX = rng.range(5, DCOLS - blob.width - 5);
-  const offsetY = rng.range(3, DROWS - blob.height - 3);
+  // Position lake randomly, preferring edges (away from first room which tends to be center)
+  const side = rng.range(0, 1); // 0 = left half, 1 = right half
+  const offsetX = side === 0
+    ? rng.range(2, Math.floor(DCOLS / 3))
+    : rng.range(Math.floor(DCOLS * 2 / 3), DCOLS - blob.width - 2);
+  const offsetY = rng.range(2, DROWS - blob.height - 2);
+
+  // Count total floor cells first
+  let totalFloor = 0;
+  for (let x = 0; x < DCOLS; x++) {
+    for (let y = 0; y < DROWS; y++) {
+      if (grid[x]![y] === 1) totalFloor++;
+    }
+  }
+  const maxLakeCells = Math.floor(totalFloor * 0.35); // don't lake more than 35%
 
   // Place lake tiles on the grid — only replace floor (value 1) cells
-  // Don't overwrite corridors, doors, or walls
   let placed = 0;
   for (let x = 0; x < DCOLS; x++) {
     for (let y = 0; y < DROWS; y++) {
+      if (placed >= maxLakeCells) break;
       const lx = x - offsetX + blob.minX;
       const ly = y - offsetY + blob.minY;
       if (lx >= 0 && lx < DCOLS && ly >= 0 && ly < DROWS && lakeGrid[lx]![ly]) {
-        if (grid[x]![y] === 1) { // only replace floor
-          // Use value 3 to mark lake cells (will be converted to liquid tile in pmap)
-          grid[x]![y] = 10 + liquidTile; // encode liquid type: 10+tileIndex
+        if (grid[x]![y] === 1) {
+          grid[x]![y] = 10 + liquidTile;
           placed++;
         }
       }
