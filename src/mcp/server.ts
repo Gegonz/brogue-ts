@@ -233,9 +233,11 @@ mcpServer.registerTool("brogue_admin", {
       populateMonsters(state);
       computeFOV(state);
       updateLighting(state);
+      // Force display buffer update
+      (eng as any).updateDisplay();
       state.messages = [];
       state.addMessage(`[ADMIN] Teleported to depth ${depth}.`);
-      msg = `Jumped to depth ${depth}`;
+      msg = `Jumped to depth ${depth}. Player at (${state.playerPos.x},${state.playerPos.y})`;
       break;
     }
     case "set_stats": {
