@@ -304,10 +304,14 @@ export class GameEngine {
         this.state.stats.turnNumber++;
         this.state.initGrids();
         generateDungeon(this.state);
+        populateItems(this.state);
+        populateMonsters(this.state);
         computeFOV(this.state);
         updateLighting(this.state);
         this.updateDisplay();
         this.emit("displayChanged");
+        // Clear old messages from previous level
+        this.state.messages = [];
         this.state.addMessage(`You descend to depth ${this.state.stats.depthLevel}.`);
       } else {
         this.state.addMessage("There are no stairs here.");
