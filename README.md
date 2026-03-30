@@ -16,7 +16,7 @@ A complete roguelike game in TypeScript, ported from [Brogue Community Edition](
 | **Survival** | HP regeneration (scales with level), nutrition drain, starvation, food rations |
 | **Display** | Canvas renderer, shadow-casting FOV, miner's light, colored sidebar, blue memory |
 | **MCP** | 5 tools: new, move, action, look, auto (fully autonomous play) |
-| **Win condition** | Reach depth 10 |
+| **Win condition** | Reach depth 26 (matching BrogueCE amulet level) |
 
 ## Quick Start
 
@@ -67,22 +67,13 @@ brogue_new({seed: 100})
 brogue_auto({turns: 50})   // repeat until victory or death
 ```
 
-## AI Benchmark (10 seeds, 34 iterations)
+## AI Benchmark
 
-| Seed | Depth | Level | Turns | Kills | Equipment | Result |
-|------|-------|-------|-------|-------|-----------|--------|
-| **1** | **10** | **10** | **2449** | **43** | war axe + plate | **VICTORY** |
-| **10** | **10** | **10** | **3694** | **36** | broadsword + plate | **VICTORY** |
-| **42** | **10** | **16** | **3832** | **53** | war axe + plate | **VICTORY** |
-| **77** | **10** | **13** | **3640** | **45** | war hammer + plate | **VICTORY** |
-| **100** | **10** | **11** | **3758** | **35** | war axe + plate | **VICTORY** |
-| 200 | 7 | 5 | 3000 | 28 | war axe + banded | combat |
-| **555** | **10** | **14** | **3633** | **57** | war hammer + banded | **VICTORY** |
-| **777** | **10** | **18** | **3099** | **54** | war axe + plate | **VICTORY** |
-| **999** | **10** | **15** | **4023** | **47** | war hammer + plate | **VICTORY** |
-| **1234** | **10** | **16** | **4279** | **50** | war axe + plate | **VICTORY** |
+Victory requires reaching depth 26 (matching BrogueCE's amulet level). The AI auto-explores, auto-fights, collects items, and descends autonomously.
 
-**Win rate: 90% (9/10) | Avg depth: 9.7 | Best: Lv18, 57 kills (seed 555)**
+Run `brogue_benchmark` to test (uses first 10 depths as a performance sample).
+
+The game is balanced for genuine roguelike challenge — equipment, leveling, and food management are all critical for deep runs.
 
 ## Architecture
 

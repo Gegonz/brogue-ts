@@ -382,8 +382,8 @@ export class GameEngine {
         this.state.stats.deepestLevel = Math.max(this.state.stats.deepestLevel, this.state.stats.depthLevel);
         this.state.stats.turnNumber++;
 
-        // Victory condition: reach depth 10
-        if (this.state.stats.depthLevel >= 10) {
+        // Victory condition: reach depth 26 (amulet level, matching BrogueCE)
+        if (this.state.stats.depthLevel >= 26) {
           this.state.gameOver = true;
           this.state.victory = true;
           this.state.messages = [];
