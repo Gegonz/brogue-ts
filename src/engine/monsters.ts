@@ -1,48 +1,55 @@
-// Simple monster system — spawn, display, bump-to-attack.
-// Phase 4 stub: no AI movement, no pathfinding, no special abilities.
+// Monster system — spawn from catalog, display, combat, AI.
+// Uses source-faithful data from catalogs/monsters.ts
 
 import { DCOLS, DROWS } from "../shared/constants.ts";
 import type { GameState } from "./state.ts";
+import { monsterCatalog, monsterDepthRanges, type MonsterCatalogEntry } from "./catalogs/monsters.ts";
 
 export interface Monster {
   x: number;
   y: number;
+  catalogIndex: number;
   name: string;
   displayChar: string;
   foreColor: [number, number, number];
   hp: number;
   maxHp: number;
-  attack: { min: number; max: number };
   defense: number;
+  accuracy: number;
+  damage: { min: number; max: number; clump: number };
+  moveSpeed: number;
+  attackSpeed: number;
   xpValue: number;
   dead: boolean;
+  flags: string[];
 }
 
-interface MonsterTemplate {
-  name: string;
-  displayChar: string;
-  foreColor: [number, number, number];
-  maxHp: number;
-  attack: { min: number; max: number };
-  defense: number;
-  xpValue: number;
-  minDepth: number;
-  maxDepth: number;
-  frequency: number;
+function xpForMonster(entry: MonsterCatalogEntry): number {
+  // XP based on monster difficulty (HP + damage + defense)
+  const avgDmg = (entry.damage.min + entry.damage.max) / 2;
+  return Math.max(1, Math.floor((entry.maxHP + avgDmg * 3 + entry.defense / 5) / 5));
 }
 
-const MONSTER_TEMPLATES: MonsterTemplate[] = [
-  { name: "rat",         displayChar: "r", foreColor: [60, 45, 25],  maxHp: 6,  attack: { min: 1, max: 3 },  defense: 0,  xpValue: 2,  minDepth: 1, maxDepth: 5,  frequency: 10 },
-  { name: "kobold",      displayChar: "k", foreColor: [60, 60, 25],  maxHp: 7,  attack: { min: 2, max: 4 },  defense: 0,  xpValue: 3,  minDepth: 1, maxDepth: 6,  frequency: 8 },
-  { name: "jackal",      displayChar: "j", foreColor: [80, 60, 15],  maxHp: 8,  attack: { min: 2, max: 4 },  defense: 0,  xpValue: 3,  minDepth: 1, maxDepth: 5,  frequency: 6 },
-  { name: "eel",         displayChar: "e", foreColor: [20, 65, 100], maxHp: 18, attack: { min: 3, max: 7 },  defense: 0,  xpValue: 6,  minDepth: 2, maxDepth: 12, frequency: 3 },
-  { name: "monkey",      displayChar: "m", foreColor: [60, 55, 15],  maxHp: 12, attack: { min: 2, max: 3 },  defense: 0,  xpValue: 3,  minDepth: 2, maxDepth: 7,  frequency: 5 },
-  { name: "goblin",      displayChar: "g", foreColor: [40, 85, 15],  maxHp: 15, attack: { min: 3, max: 5 },  defense: 1,  xpValue: 5,  minDepth: 3, maxDepth: 10, frequency: 6 },
-  { name: "toad",        displayChar: "t", foreColor: [45, 70, 15],  maxHp: 18, attack: { min: 1, max: 4 },  defense: 0,  xpValue: 4,  minDepth: 3, maxDepth: 8,  frequency: 4 },
-  { name: "vampire bat",  displayChar: "v", foreColor: [50, 25, 15],  maxHp: 18, attack: { min: 4, max: 7 },  defense: 0,  xpValue: 7,  minDepth: 4, maxDepth: 12, frequency: 4 },
-  { name: "ogre",        displayChar: "O", foreColor: [60, 25, 75],  maxHp: 55, attack: { min: 9, max: 13 }, defense: 2,  xpValue: 15, minDepth: 5, maxDepth: 15, frequency: 3 },
-  { name: "troll",       displayChar: "T", foreColor: [40, 60, 15],  maxHp: 65, attack: { min: 10, max: 15 },defense: 3,  xpValue: 20, minDepth: 7, maxDepth: 20, frequency: 2 },
-];
+function createMonster(catalogIndex: number, x: number, y: number): Monster {
+  const entry = monsterCatalog[catalogIndex]!;
+  return {
+    x, y,
+    catalogIndex,
+    name: entry.name,
+    displayChar: entry.displayChar,
+    foreColor: [...entry.foreColor],
+    hp: entry.maxHP,
+    maxHp: entry.maxHP,
+    defense: entry.defense,
+    accuracy: entry.accuracy,
+    damage: { ...entry.damage },
+    moveSpeed: entry.moveSpeed,
+    attackSpeed: entry.attackSpeed,
+    xpValue: xpForMonster(entry),
+    dead: false,
+    flags: [...entry.flags],
+  };
+}
 
 function randomFloorCell(state: GameState): { x: number; y: number } | null {
   const rng = state.rng;
@@ -51,10 +58,8 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
     const y = rng.range(1, DROWS - 2);
     const tile = state.pmap[x]![y]!.layers[0]!;
     if (tile >= 2 && tile <= 5) {
-      // Not on player, not on another monster, not on stairs
       if (x === state.playerPos.x && y === state.playerPos.y) continue;
       if (state.monsters.some(m => !m.dead && m.x === x && m.y === y)) continue;
-      // Not too close to player (at least 5 cells away)
       const dist = Math.abs(x - state.playerPos.x) + Math.abs(y - state.playerPos.y);
       if (dist < 5) continue;
       return { x, y };
@@ -64,7 +69,7 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
 }
 
 /**
- * Spawn monsters during dungeon generation.
+ * Spawn monsters using the catalog depth ranges.
  */
 export function populateMonsters(state: GameState): void {
   const rng = state.rng;
@@ -73,38 +78,25 @@ export function populateMonsters(state: GameState): void {
 
   state.monsters = [];
 
-  // Filter templates eligible for this depth
-  const eligible = MONSTER_TEMPLATES.filter(t => depth >= t.minDepth && depth <= t.maxDepth);
+  // Filter eligible monsters for this depth
+  const eligible = monsterDepthRanges.filter(r => depth >= r.minDepth && depth <= r.maxDepth);
   if (eligible.length === 0) return;
 
   for (let i = 0; i < monsterCount; i++) {
     const loc = randomFloorCell(state);
     if (!loc) continue;
 
-    // Weighted random template selection
+    // Weighted random selection
     let totalFreq = 0;
-    for (const t of eligible) totalFreq += t.frequency;
+    for (const r of eligible) totalFreq += r.frequency;
     let roll = rng.range(0, totalFreq - 1);
-    let template = eligible[0]!;
-    for (const t of eligible) {
-      if (roll < t.frequency) { template = t; break; }
-      roll -= t.frequency;
+    let chosen = eligible[0]!;
+    for (const r of eligible) {
+      if (roll < r.frequency) { chosen = r; break; }
+      roll -= r.frequency;
     }
 
-    const monster: Monster = {
-      x: loc.x,
-      y: loc.y,
-      name: template.name,
-      displayChar: template.displayChar,
-      foreColor: [...template.foreColor],
-      hp: template.maxHp,
-      maxHp: template.maxHp,
-      attack: { ...template.attack },
-      defense: template.defense,
-      xpValue: template.xpValue,
-      dead: false,
-    };
-
+    const monster = createMonster(chosen.monsterIndex, loc.x, loc.y);
     state.monsters.push(monster);
   }
 }
@@ -118,13 +110,25 @@ export function monsterAt(state: GameState, x: number, y: number): Monster | nul
 
 /**
  * Player attacks a monster (bump combat).
- * Returns true if the attack happened.
+ * Uses BrogueCE hit probability: accuracy * 0.987^defense
  */
 export function playerAttacksMonster(state: GameState, monster: Monster): boolean {
   const rng = state.rng;
+
+  // Hit probability: player accuracy (100 + weapon bonus) vs monster defense
+  const playerAccuracy = 100 + (state.weapon?.bonusDamage ?? 0) * 5;
+  const hitProb = Math.min(100, Math.floor(playerAccuracy * Math.pow(0.987, monster.defense)));
+  const hits = rng.range(0, 99) < hitProb;
+
+  if (!hits) {
+    state.addMessage(`You miss the ${monster.name}.`);
+    return true; // turn consumed even on miss
+  }
+
+  // Damage: base (1-3) + strength bonus + weapon bonus
   const weaponBonus = state.weapon?.bonusDamage ?? 0;
-  const damage = rng.range(1, 3 + state.stats.strength - 10 + weaponBonus);
-  const actualDamage = Math.max(1, damage - monster.defense);
+  const baseDamage = rng.range(1, 3 + state.stats.strength - 10 + weaponBonus);
+  const actualDamage = Math.max(1, baseDamage);
 
   monster.hp -= actualDamage;
 
@@ -153,13 +157,25 @@ export function playerAttacksMonster(state: GameState, monster: Monster): boolea
 }
 
 /**
- * Monster attacks the player (called when adjacent, each turn).
+ * Monster attacks the player.
+ * Uses BrogueCE hit probability: accuracy * 0.987^defense
  */
 export function monsterAttacksPlayer(state: GameState, monster: Monster): void {
   const rng = state.rng;
+
+  // Hit probability: monster accuracy vs player defense (armor)
   const armorDef = state.armor?.defense ?? 0;
-  const damage = rng.range(monster.attack.min, monster.attack.max);
-  const actualDamage = Math.max(1, damage - armorDef);
+  const hitProb = Math.min(100, Math.floor(monster.accuracy * Math.pow(0.987, armorDef * 10)));
+  const hits = rng.range(0, 99) < hitProb;
+
+  if (!hits) {
+    state.addMessage(`The ${monster.name} misses you.`);
+    return;
+  }
+
+  // Damage from monster's damage range, reduced by armor
+  const rawDamage = rng.clumpedRange(monster.damage.min, monster.damage.max, monster.damage.clump);
+  const actualDamage = Math.max(1, rawDamage - armorDef);
 
   state.stats.hp -= actualDamage;
 
@@ -175,21 +191,17 @@ export function monsterAttacksPlayer(state: GameState, monster: Monster): void {
 
 /**
  * Check if a monster has line-of-sight to the player.
- * Uses the same VISIBLE flag as the FOV system — if the monster's cell
- * is visible to the player, the monster can also "see" the player.
  */
 function monsterCanSeePlayer(state: GameState, monster: Monster): boolean {
-  // Symmetric visibility: if the player can see the monster's cell, the monster can see the player
-  return (state.pmap[monster.x]![monster.y]!.flags & 0x2) !== 0; // VISIBLE flag
+  return (state.pmap[monster.x]![monster.y]!.flags & 0x2) !== 0;
 }
 
 function isPassableTile(tile: number): boolean {
-  return (tile >= 2 && tile <= 5) || tile === 8 || tile === 12 || tile === 13; // floor/open_door/stairs
+  return (tile >= 2 && tile <= 5) || tile === 8 || tile === 12 || tile === 13;
 }
 
 /**
- * Process monster turns — called each player turn.
- * Adjacent monsters attack. Visible monsters chase. Others wander.
+ * Process monster turns — chase, attack, wander.
  */
 export function processMonsterTurns(state: GameState): void {
   const px = state.playerPos.x;
@@ -198,6 +210,9 @@ export function processMonsterTurns(state: GameState): void {
 
   for (const monster of state.monsters) {
     if (monster.dead || state.gameOver) continue;
+
+    // Skip immobile monsters
+    if (monster.flags.includes("immobile") || monster.flags.includes("inanimate")) continue;
 
     const dx = Math.abs(monster.x - px);
     const dy = Math.abs(monster.y - py);
@@ -208,18 +223,12 @@ export function processMonsterTurns(state: GameState): void {
       continue;
     }
 
-    // Can see player: chase (move one step toward player)
+    // Can see player: chase
     if (monsterCanSeePlayer(state, monster)) {
       const stepX = Math.sign(px - monster.x);
       const stepY = Math.sign(py - monster.y);
 
-      // Try direct move, then cardinal fallbacks
-      const moves: [number, number][] = [
-        [stepX, stepY],
-        [stepX, 0],
-        [0, stepY],
-      ];
-
+      const moves: [number, number][] = [[stepX, stepY], [stepX, 0], [0, stepY]];
       let moved = false;
       for (const [mx, my] of moves) {
         if (mx === 0 && my === 0) continue;
@@ -228,7 +237,6 @@ export function processMonsterTurns(state: GameState): void {
         if (nx < 0 || nx >= DCOLS || ny < 0 || ny >= DROWS) continue;
         const tile = state.pmap[nx]![ny]!.layers[0]!;
         if (!isPassableTile(tile)) continue;
-        // Don't move onto player or other monster
         if (nx === px && ny === py) continue;
         if (state.monsters.some(m => !m.dead && m !== monster && m.x === nx && m.y === ny)) continue;
         monster.x = nx;
@@ -237,7 +245,6 @@ export function processMonsterTurns(state: GameState): void {
         break;
       }
 
-      // After moving, check if now adjacent — attack immediately
       if (moved) {
         const ndx = Math.abs(monster.x - px);
         const ndy = Math.abs(monster.y - py);
@@ -248,11 +255,12 @@ export function processMonsterTurns(state: GameState): void {
       continue;
     }
 
-    // Can't see player: random wander (20% chance per turn)
+    // Wander (20% chance)
     if (rng.percent(20)) {
       const dir = rng.range(0, 7);
-      const wx = monster.x + [0, 0, -1, 1, -1, -1, 1, 1][dir]!;
-      const wy = monster.y + [-1, 1, 0, 0, -1, 1, -1, 1][dir]!;
+      const offsets = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]];
+      const wx = monster.x + offsets[dir]![0]!;
+      const wy = monster.y + offsets[dir]![1]!;
       if (wx >= 0 && wx < DCOLS && wy >= 0 && wy < DROWS) {
         const tile = state.pmap[wx]![wy]!.layers[0]!;
         if (isPassableTile(tile) && !(wx === px && wy === py)

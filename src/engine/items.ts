@@ -1,17 +1,22 @@
-// Simple floor items — spawn during dungeon gen, display on map.
-// Phase 3 stub: no inventory, no identification, no usage yet.
+// Item system — spawn from catalog, display, pickup, equipment.
+// Uses source-faithful data from catalogs/items.ts
 
 import { DCOLS, DROWS } from "../shared/constants.ts";
 import type { GameState } from "./state.ts";
+import {
+  foodTable, weaponTable, armorTable, potionTable, scrollTable,
+  staffTable, ringTable, wandTable, type ItemTableEntry,
+} from "./catalogs/items.ts";
 
 export interface FloorItem {
   x: number;
   y: number;
   category: ItemCategory;
-  kind: number;
+  kind: number;         // index into the category's table
   displayChar: string;
   foreColor: [number, number, number];
   name: string;
+  enchantment: number;  // +1, +2, etc. for weapons/armor/rings
   collected: boolean;
 }
 
@@ -29,34 +34,54 @@ export enum ItemCategory {
   KEY,
 }
 
-interface ItemTemplate {
-  category: ItemCategory;
-  displayChar: string;
-  foreColor: [number, number, number];
-  names: string[];
+// Display characters and colors for each category
+const CATEGORY_DISPLAY: Record<number, { char: string; color: [number, number, number] }> = {
+  [ItemCategory.FOOD]:   { char: ":", color: [70, 35, 0] },
+  [ItemCategory.POTION]: { char: "!", color: [100, 0, 100] },
+  [ItemCategory.SCROLL]: { char: "?", color: [100, 100, 50] },
+  [ItemCategory.WEAPON]: { char: ")", color: [100, 100, 100] },
+  [ItemCategory.ARMOR]:  { char: "[", color: [70, 55, 25] },
+  [ItemCategory.STAFF]:  { char: "/", color: [100, 80, 20] },
+  [ItemCategory.WAND]:   { char: "~", color: [60, 60, 100] },
+  [ItemCategory.RING]:   { char: "=", color: [100, 85, 0] },
+  [ItemCategory.GOLD]:   { char: "*", color: [100, 85, 0] },
+};
+
+function getTable(category: ItemCategory): ItemTableEntry[] {
+  switch (category) {
+    case ItemCategory.FOOD: return foodTable;
+    case ItemCategory.WEAPON: return weaponTable;
+    case ItemCategory.ARMOR: return armorTable;
+    case ItemCategory.POTION: return potionTable;
+    case ItemCategory.SCROLL: return scrollTable;
+    case ItemCategory.STAFF: return staffTable;
+    case ItemCategory.WAND: return wandTable;
+    case ItemCategory.RING: return ringTable;
+    default: return [];
+  }
 }
 
-const ITEM_TEMPLATES: ItemTemplate[] = [
-  { category: ItemCategory.FOOD,   displayChar: ":", foreColor: [70, 35, 0],   names: ["a ration of food"] },
-  { category: ItemCategory.POTION, displayChar: "!", foreColor: [100, 0, 100], names: ["a potion", "a purple potion", "a blue potion", "a green potion", "a red potion", "a yellow potion"] },
-  { category: ItemCategory.SCROLL, displayChar: "?", foreColor: [100, 100, 50],names: ["a scroll", "a scroll titled BLAUMEUX", "a scroll titled ZELGO MER", "a scroll titled JUYED AWK YACC"] },
-  { category: ItemCategory.WEAPON, displayChar: ")", foreColor: [100, 100, 100], names: ["a dagger", "a sword", "a broadsword", "a mace", "a war hammer", "a spear", "a war axe"] },
-  { category: ItemCategory.ARMOR,  displayChar: "[", foreColor: [70, 55, 25],  names: ["leather armor", "scale mail", "chain mail", "banded mail", "plate armor"] },
-  { category: ItemCategory.STAFF,  displayChar: "/", foreColor: [100, 80, 20], names: ["a staff", "a birch staff", "a oak staff", "a willow staff"] },
-  { category: ItemCategory.RING,   displayChar: "=", foreColor: [100, 85, 0],  names: ["a ring", "a jade ring", "a gold ring", "a silver ring"] },
-  { category: ItemCategory.GOLD,   displayChar: "*", foreColor: [100, 85, 0],  names: ["gold pieces"] },
-];
+function chooseKind(table: ItemTableEntry[], rng: { range: (a: number, b: number) => number }): number {
+  // Weighted selection by frequency (matching BrogueCE chooseKind)
+  let totalFreq = 0;
+  for (const entry of table) totalFreq += entry.frequency;
+  if (totalFreq <= 0) return rng.range(0, table.length - 1);
+
+  let roll = rng.range(0, totalFreq - 1);
+  for (let i = 0; i < table.length; i++) {
+    if (roll < table[i]!.frequency) return i;
+    roll -= table[i]!.frequency;
+  }
+  return 0;
+}
 
 function randomFloorCell(state: GameState): { x: number; y: number } | null {
   const rng = state.rng;
-  // Try random positions up to 200 times
   for (let attempt = 0; attempt < 200; attempt++) {
     const x = rng.range(1, DCOLS - 2);
     const y = rng.range(1, DROWS - 2);
     const tile = state.pmap[x]![y]!.layers[0]!;
-    // Floor tiles: 2-5 (FLOOR variants)
     if (tile >= 2 && tile <= 5) {
-      // Check no other item here
       const occupied = state.floorItems.some(it => it.x === x && it.y === y);
       if (!occupied && !(x === state.playerPos.x && y === state.playerPos.y)) {
         return { x, y };
@@ -66,9 +91,32 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
   return null;
 }
 
+function generateItem(category: ItemCategory, rng: { range: (a: number, b: number) => number }, depth: number): { kind: number; name: string; enchantment: number } {
+  const table = getTable(category);
+  if (table.length === 0) {
+    return { kind: 0, name: category === ItemCategory.GOLD ? "gold pieces" : "unknown item", enchantment: 0 };
+  }
+
+  const kind = chooseKind(table, rng);
+  const entry = table[kind]!;
+
+  // Enchantment for weapons/armor/rings (depth-based)
+  let enchantment = 0;
+  if (category === ItemCategory.WEAPON || category === ItemCategory.ARMOR || category === ItemCategory.RING) {
+    enchantment = rng.range(0, Math.min(3, Math.floor(depth / 4)));
+    if (rng.range(0, 9) === 0) enchantment = -1; // cursed (10% chance)
+  }
+
+  let name = entry.name;
+  if (enchantment > 0) name = `+${enchantment} ${name}`;
+  else if (enchantment < 0) name = `${enchantment} ${name}`;
+
+  return { kind, name, enchantment };
+}
+
 /**
  * Spawn items on the floor during dungeon generation.
- * Simplified: spawns 3-8 random items per level.
+ * Uses catalog data for item selection.
  */
 export function populateItems(state: GameState): void {
   const rng = state.rng;
@@ -77,76 +125,75 @@ export function populateItems(state: GameState): void {
 
   state.floorItems = [];
 
-  // Guarantee essential items per level
-  const guaranteed: number[] = [];
-  // Always guarantee 1 food ration
-  guaranteed.push(0); // food
-  // Guarantee weapon on D1, weapon or armor on deeper
+  // Guaranteed items per level
+  const guaranteed: ItemCategory[] = [];
+  guaranteed.push(ItemCategory.FOOD); // always food
   if (depth === 1) {
-    guaranteed.push(3); // weapon
+    guaranteed.push(ItemCategory.WEAPON);
   } else {
-    guaranteed.push(rng.percent(60) ? 3 : 4); // weapon or armor
+    guaranteed.push(rng.percent(60) ? ItemCategory.WEAPON : ItemCategory.ARMOR);
   }
   if (depth >= 2 && rng.percent(50)) {
-    guaranteed.push(4); // bonus armor chance
+    guaranteed.push(ItemCategory.ARMOR);
   }
-  // Extra food on deeper levels (longer exploration)
   if (depth >= 3 && rng.percent(60)) {
-    guaranteed.push(0); // second food
+    guaranteed.push(ItemCategory.FOOD);
   }
 
-  for (const forcedTemplate of guaranteed) {
+  for (const cat of guaranteed) {
     const loc = randomFloorCell(state);
     if (!loc) continue;
-    const template = ITEM_TEMPLATES[forcedTemplate]!;
-    const nameIdx = rng.range(0, template.names.length - 1);
+    const display = CATEGORY_DISPLAY[cat] ?? { char: "?", color: [100, 100, 100] as [number, number, number] };
+    const gen = generateItem(cat, rng, depth);
     state.floorItems.push({
       x: loc.x, y: loc.y,
-      category: template.category, kind: nameIdx,
-      displayChar: template.displayChar, foreColor: [...template.foreColor],
-      name: template.names[nameIdx]!, collected: false,
+      category: cat, kind: gen.kind,
+      displayChar: display.char, foreColor: [...display.color],
+      name: gen.name, enchantment: gen.enchantment, collected: false,
     });
   }
+
+  // Category weights for random items
+  const categories: { cat: ItemCategory; weight: number }[] = [
+    { cat: ItemCategory.FOOD, weight: 2 },
+    { cat: ItemCategory.POTION, weight: 5 },
+    { cat: ItemCategory.SCROLL, weight: 3 },
+    { cat: ItemCategory.WEAPON, weight: 3 },
+    { cat: ItemCategory.ARMOR, weight: 2 },
+    { cat: ItemCategory.STAFF, weight: 1 },
+    { cat: ItemCategory.WAND, weight: 1 },
+    { cat: ItemCategory.RING, weight: 1 },
+    { cat: ItemCategory.GOLD, weight: 4 },
+  ];
+
+  let totalWeight = 0;
+  for (const c of categories) totalWeight += c.weight;
 
   for (let i = 0; i < itemCount; i++) {
     const loc = randomFloorCell(state);
     if (!loc) continue;
 
-    // Pick random item category, weighted
-    const weights = [2, 5, 3, 3, 2, 1, 1, 4]; // food, potion, scroll, weapon(+), armor(+), staff, ring, gold
-    let totalWeight = 0;
-    for (const w of weights) totalWeight += w;
     let roll = rng.range(0, totalWeight - 1);
-    let templateIdx = 0;
-    for (let j = 0; j < weights.length; j++) {
-      if (roll < weights[j]!) {
-        templateIdx = j;
-        break;
-      }
-      roll -= weights[j]!;
+    let cat = ItemCategory.GOLD;
+    for (const c of categories) {
+      if (roll < c.weight) { cat = c.cat; break; }
+      roll -= c.weight;
     }
 
-    const template = ITEM_TEMPLATES[templateIdx]!;
-    const nameIdx = rng.range(0, template.names.length - 1);
+    const display = CATEGORY_DISPLAY[cat] ?? { char: "?", color: [100, 100, 100] as [number, number, number] };
+    const gen = generateItem(cat, rng, depth);
 
-    const item: FloorItem = {
-      x: loc.x,
-      y: loc.y,
-      category: template.category,
-      kind: nameIdx,
-      displayChar: template.displayChar,
-      foreColor: [...template.foreColor],
-      name: template.names[nameIdx]!,
-      collected: false,
-    };
-
-    state.floorItems.push(item);
+    state.floorItems.push({
+      x: loc.x, y: loc.y,
+      category: cat, kind: gen.kind,
+      displayChar: display.char, foreColor: [...display.color],
+      name: gen.name, enchantment: gen.enchantment, collected: false,
+    });
   }
 }
 
 /**
- * Pick up item at player's location (if any).
- * Returns the item picked up, or null.
+ * Pick up item at player's location.
  */
 export function pickUpItem(state: GameState): FloorItem | null {
   const px = state.playerPos.x;
@@ -155,105 +202,97 @@ export function pickUpItem(state: GameState): FloorItem | null {
   for (const item of state.floorItems) {
     if (!item.collected && item.x === px && item.y === py) {
       item.collected = true;
+
       if (item.category === ItemCategory.GOLD) {
         const goldAmount = state.rng.range(5, 30) * state.stats.depthLevel;
         state.stats.gold += goldAmount;
         state.addMessage(`You pick up ${goldAmount} gold pieces.`);
+
       } else if (item.category === ItemCategory.POTION) {
-        const healAmount = state.rng.range(8, 15);
-        const oldHp = state.stats.hp;
-        state.stats.hp = Math.min(state.stats.hp + healAmount, state.stats.maxHp);
-        const healed = state.stats.hp - oldHp;
-        if (healed > 0) {
-          state.addMessage(`You drink ${item.name}. You feel better! (+${healed} HP)`);
-        } else {
-          state.addMessage(`You drink ${item.name}. It tastes refreshing.`);
-        }
-      } else if (item.category === ItemCategory.WEAPON) {
-        const weaponDamage: Record<string, number> = {
-          "a dagger": 2, "a sword": 4, "a broadsword": 6,
-          "a mace": 5, "a war hammer": 7, "a spear": 4, "a war axe": 8,
-        };
-        const bonus = weaponDamage[item.name] ?? 3;
-        if (!state.weapon || bonus > state.weapon.bonusDamage) {
-          const old = state.weapon;
-          state.weapon = { name: item.name, bonusDamage: bonus };
-          if (old) {
-            state.addMessage(`You swap your ${old.name} for ${item.name}. (+${bonus} damage)`);
+        // Use catalog data for effect
+        const table = potionTable;
+        const entry = table[item.kind];
+        if (entry && entry.magicPolarity >= 0) {
+          const healAmount = Math.max(5, entry.range.lowerBound > 0 ? Math.floor(entry.range.lowerBound / 3) : state.rng.range(8, 15));
+          const oldHp = state.stats.hp;
+          state.stats.hp = Math.min(state.stats.hp + healAmount, state.stats.maxHp);
+          const healed = state.stats.hp - oldHp;
+          if (healed > 0) {
+            state.addMessage(`You drink a potion of ${entry.name}. (+${healed} HP)`);
           } else {
-            state.addMessage(`You equip ${item.name}. (+${bonus} damage)`);
+            state.addMessage(`You drink a potion of ${entry.name}.`);
           }
+        } else {
+          state.addMessage(`You drink a potion. It tastes strange.`);
+        }
+
+      } else if (item.category === ItemCategory.WEAPON) {
+        const table = weaponTable;
+        const entry = table[item.kind];
+        const dmgRange = entry ? entry.range : { lowerBound: 3, upperBound: 5 };
+        const bonusDamage = Math.floor((dmgRange.lowerBound + dmgRange.upperBound) / 4) + item.enchantment;
+        if (!state.weapon || bonusDamage > state.weapon.bonusDamage) {
+          const old = state.weapon;
+          state.weapon = { name: item.name, bonusDamage };
+          state.addMessage(old ? `You swap your ${old.name} for ${item.name}. (+${bonusDamage} dmg)` : `You equip ${item.name}. (+${bonusDamage} dmg)`);
         } else {
           state.addMessage(`You see ${item.name} but your ${state.weapon.name} is better.`);
         }
+
       } else if (item.category === ItemCategory.ARMOR) {
-        const armorDef: Record<string, number> = {
-          "leather armor": 2, "scale mail": 3, "chain mail": 4,
-          "banded mail": 5, "plate armor": 7,
-        };
-        const def = armorDef[item.name] ?? 2;
+        const table = armorTable;
+        const entry = table[item.kind];
+        const def = entry ? Math.floor(entry.range.lowerBound / 10) + item.enchantment : 2 + item.enchantment;
         if (!state.armor || def > state.armor.defense) {
           const old = state.armor;
           state.armor = { name: item.name, defense: def };
-          if (old) {
-            state.addMessage(`You swap your ${old.name} for ${item.name}. (+${def} defense)`);
-          } else {
-            state.addMessage(`You don ${item.name}. (+${def} defense)`);
-          }
+          state.addMessage(old ? `You swap your ${old.name} for ${item.name}. (+${def} def)` : `You don ${item.name}. (+${def} def)`);
         } else {
           state.addMessage(`You see ${item.name} but your ${state.armor.name} is better.`);
         }
+
       } else if (item.category === ItemCategory.SCROLL) {
-        // Scrolls have immediate effects based on kind
-        const effects = [
-          () => { // scroll 0: generic — minor heal
-            const heal = state.rng.range(5, 10);
-            state.stats.hp = Math.min(state.stats.hp + heal, state.stats.maxHp);
-            state.addMessage(`You read ${item.name}. A warm glow surrounds you. (+${heal} HP)`);
-          },
-          () => { // scroll 1: enchantment — boost weapon
-            if (state.weapon) {
-              state.weapon.bonusDamage += 2;
-              state.addMessage(`You read ${item.name}. Your ${state.weapon.name} glows! (+2 damage)`);
-            } else {
-              state.stats.strength++;
-              state.stats.maxStrength++;
-              state.addMessage(`You read ${item.name}. You feel stronger! (+1 strength)`);
-            }
-          },
-          () => { // scroll 2: strength
-            state.stats.strength++;
-            state.stats.maxStrength++;
-            state.addMessage(`You read ${item.name}. You feel stronger! (+1 strength)`);
-          },
-          () => { // scroll 3: protect armor
-            if (state.armor) {
-              state.armor.defense += 1;
-              state.addMessage(`You read ${item.name}. Your ${state.armor.name} shimmers! (+1 defense)`);
-            } else {
-              state.stats.maxHp += 5;
-              state.stats.hp += 5;
-              state.addMessage(`You read ${item.name}. You feel tougher! (+5 max HP)`);
-            }
-          },
-        ];
-        const effectIdx = item.kind % effects.length;
-        effects[effectIdx]!();
+        const entry = scrollTable[item.kind];
+        const effectName = entry?.name ?? "unknown";
+        // Scrolls have varied effects
+        if (effectName === "enchanting" && state.weapon) {
+          state.weapon.bonusDamage += 2;
+          state.addMessage(`You read a scroll of enchanting. Your ${state.weapon.name} glows! (+2 dmg)`);
+        } else if (effectName === "enchanting" && state.armor) {
+          state.armor.defense += 1;
+          state.addMessage(`You read a scroll of enchanting. Your ${state.armor.name} shimmers! (+1 def)`);
+        } else if (effectName === "strength" || effectName === "identify") {
+          state.stats.strength++;
+          state.stats.maxStrength++;
+          state.addMessage(`You read a scroll of ${effectName}. You feel stronger! (+1 Str)`);
+        } else if (effectName === "protect armor" && state.armor) {
+          state.armor.defense += 1;
+          state.addMessage(`You read a scroll of protection. Your ${state.armor.name} hardens! (+1 def)`);
+        } else {
+          const healAmt = state.rng.range(5, 10);
+          state.stats.hp = Math.min(state.stats.hp + healAmt, state.stats.maxHp);
+          state.addMessage(`You read a scroll of ${effectName}. (+${healAmt} HP)`);
+        }
+
       } else if (item.category === ItemCategory.RING) {
-        // Rings give permanent passive bonuses
-        const ringEffects = [
-          () => { state.stats.maxHp += 3; state.stats.hp += 3;
-            state.addMessage(`You put on ${item.name}. You feel healthier! (+3 max HP)`); },
-          () => { state.stats.strength++;
-            state.addMessage(`You put on ${item.name}. You feel a surge of power! (+1 strength)`); },
-          () => { state.stats.maxHp += 5; state.stats.hp += 5;
-            state.addMessage(`You put on ${item.name}. You feel much tougher! (+5 max HP)`); },
-          () => { state.stats.strength++; state.stats.maxStrength++;
-            state.addMessage(`You put on ${item.name}. Strength courses through you! (+1 strength)`); },
-        ];
-        ringEffects[item.kind % ringEffects.length]!();
-      } else if (item.category === ItemCategory.STAFF) {
-        // Staves: zap for damage (simplified — just deal damage to nearest visible monster)
+        const entry = ringTable[item.kind];
+        const effectName = entry?.name ?? "unknown";
+        if (effectName === "regeneration") {
+          state.stats.maxHp += 5;
+          state.stats.hp += 5;
+          state.addMessage(`You put on a ring of ${effectName}. (+5 max HP)`);
+        } else if (effectName === "transference" || effectName === "reaping") {
+          state.stats.strength++;
+          state.stats.maxStrength++;
+          state.addMessage(`You put on a ring of ${effectName}. (+1 Str)`);
+        } else {
+          state.stats.maxHp += 3;
+          state.stats.hp += 3;
+          state.addMessage(`You put on a ring of ${effectName}. (+3 max HP)`);
+        }
+
+      } else if (item.category === ItemCategory.STAFF || item.category === ItemCategory.WAND) {
+        // Zap nearest visible monster
         let nearest: { monster: typeof state.monsters[0]; dist: number } | null = null;
         for (const m of state.monsters) {
           if (m.dead) continue;
@@ -261,19 +300,23 @@ export function pickUpItem(state: GameState): FloorItem | null {
           const d = Math.abs(m.x - state.playerPos.x) + Math.abs(m.y - state.playerPos.y);
           if (!nearest || d < nearest.dist) nearest = { monster: m, dist: d };
         }
+        const table = item.category === ItemCategory.STAFF ? staffTable : wandTable;
+        const entry = table[item.kind];
+        const zapName = entry?.name ?? "magic";
         if (nearest) {
-          const zapDamage = state.rng.range(5, 12);
+          const zapDamage = state.rng.range(5, 15);
           nearest.monster.hp -= zapDamage;
           if (nearest.monster.hp <= 0) {
             nearest.monster.dead = true;
             state.stats.monstersKilled++;
-            state.addMessage(`You zap ${item.name} at the ${nearest.monster.name}! It dies! (${zapDamage} damage)`);
+            state.addMessage(`You zap a staff of ${zapName}! The ${nearest.monster.name} dies! (${zapDamage})`);
           } else {
-            state.addMessage(`You zap ${item.name} at the ${nearest.monster.name}! (${zapDamage} damage, ${nearest.monster.hp}/${nearest.monster.maxHp} HP)`);
+            state.addMessage(`You zap a staff of ${zapName} at the ${nearest.monster.name}! (${zapDamage} dmg)`);
           }
         } else {
-          state.addMessage(`You wave ${item.name} but nothing happens.`);
+          state.addMessage(`You wave a staff of ${zapName} but nothing happens.`);
         }
+
       } else {
         state.addMessage(`You see ${item.name} here.`);
       }
