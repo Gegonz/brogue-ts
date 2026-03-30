@@ -662,6 +662,73 @@ function placeLakes(grid: Grid, depth: number, rng: RNG): void {
 }
 
 // ---------------------------------------------------------------------------
+// Vegetation placement
+// ---------------------------------------------------------------------------
+
+// Surface tile indices
+const GRASS = 66;
+const DEAD_GRASS = 67;
+const GRAY_FUNGUS = 68;
+const LUMINESCENT_FUNGUS = 69;
+
+function placeVegetation(grid: Grid, depth: number, rng: RNG): void {
+  // Vegetation chance decreases with depth (surface levels have more life)
+  const vegChance = Math.max(10, 60 - depth * 3);
+  if (!rng.percent(vegChance)) return;
+
+  // Choose vegetation type based on depth
+  const vegTypes = depth <= 5
+    ? [GRASS, GRASS, DEAD_GRASS]
+    : depth <= 15
+      ? [DEAD_GRASS, GRAY_FUNGUS, LUMINESCENT_FUNGUS]
+      : [GRAY_FUNGUS, LUMINESCENT_FUNGUS];
+
+  const vegTile = vegTypes[rng.range(0, vegTypes.length - 1)]!;
+
+  // Place 2-4 small patches of vegetation
+  const patches = rng.range(2, 4);
+  for (let p = 0; p < patches; p++) {
+    // Pick a random floor cell as center
+    let cx = -1, cy = -1;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const x = rng.range(2, DCOLS - 3);
+      const y = rng.range(2, DROWS - 3);
+      if (grid[x]![y] === 1) { // floor
+        cx = x; cy = y;
+        break;
+      }
+    }
+    if (cx === -1) continue;
+
+    // Place a small cluster of vegetation (3-8 cells)
+    const size = rng.range(3, 8);
+    let placed = 0;
+    const stack: [number, number][] = [[cx, cy]];
+    const visited = allocGrid();
+    visited[cx]![cy] = 1;
+
+    while (stack.length > 0 && placed < size) {
+      const [x, y] = stack.pop()!;
+      // Only place on floor cells (value 1), not on lakes or corridors
+      if (grid[x]![y] === 1 && rng.percent(75)) {
+        // Encode vegetation: 100 + tile index (separate from lake encoding at 10+)
+        grid[x]![y] = 100 + vegTile;
+        placed++;
+      }
+      // Expand to random neighbors
+      for (let dir = 0; dir < 4; dir++) {
+        const nx = x + nbDirs[dir]![0]!;
+        const ny = y + nbDirs[dir]![1]!;
+        if (coordinatesAreInMap(nx, ny) && !visited[nx]![ny] && grid[nx]![ny] === 1) {
+          visited[nx]![ny] = 1;
+          stack.push([nx, ny]);
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -723,6 +790,9 @@ export function generateDungeon(state: GameState): void {
   // Place lakes (water/lava) on deeper levels
   placeLakes(grid, state.stats.depthLevel, rng);
 
+  // Place vegetation patches (grass/fungus on surface)
+  placeVegetation(grid, state.stats.depthLevel, rng);
+
   // -----------------------------------------------------------------------
   // Translate grid into pmap
   // -----------------------------------------------------------------------
@@ -744,6 +814,11 @@ export function generateDungeon(state: GameState): void {
         state.pmap[x]![y]!.layers[0] = DOOR;
         lastFloorX = x;
         lastFloorY = y;
+      } else if (val >= 100) {
+        // Vegetation tile (encoded as 100 + tileIndex, placed on floor)
+        state.pmap[x]![y]!.layers[0] = val - 100;
+        if (firstFloorX === -1) { firstFloorX = x; firstFloorY = y; }
+        lastFloorX = x; lastFloorY = y;
       } else if (val >= 10) {
         // Lake/liquid tile (encoded as 10 + tileIndex)
         state.pmap[x]![y]!.layers[0] = val - 10;
