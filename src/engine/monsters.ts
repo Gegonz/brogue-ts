@@ -4,6 +4,7 @@
 import { DCOLS, DROWS } from "../shared/constants.ts";
 import type { GameState } from "./state.ts";
 import { monsterCatalog, monsterDepthRanges, type MonsterCatalogEntry } from "./catalogs/monsters.ts";
+import { playerAttackMonster, monsterAttackPlayer } from "./combat.ts";
 
 export interface Monster {
   x: number;
@@ -110,83 +111,18 @@ export function monsterAt(state: GameState, x: number, y: number): Monster | nul
 
 /**
  * Player attacks a monster (bump combat).
- * Uses BrogueCE hit probability: accuracy * 0.987^defense
+ * Delegates to combat.ts for proper BrogueCE formulas.
  */
 export function playerAttacksMonster(state: GameState, monster: Monster): boolean {
-  const rng = state.rng;
-
-  // Hit probability: player accuracy (100 + weapon bonus) vs monster defense
-  const playerAccuracy = 100 + (state.weapon?.bonusDamage ?? 0) * 5;
-  const hitProb = Math.min(100, Math.floor(playerAccuracy * Math.pow(0.987, monster.defense)));
-  const hits = rng.range(0, 99) < hitProb;
-
-  if (!hits) {
-    state.addMessage(`You miss the ${monster.name}.`);
-    return true; // turn consumed even on miss
-  }
-
-  // Damage: base (1-3) + strength bonus + weapon bonus
-  const weaponBonus = state.weapon?.bonusDamage ?? 0;
-  const baseDamage = rng.range(1, 3 + state.stats.strength - 10 + weaponBonus);
-  const actualDamage = Math.max(1, baseDamage);
-
-  monster.hp -= actualDamage;
-
-  if (monster.hp <= 0) {
-    monster.dead = true;
-    state.stats.monstersKilled++;
-    state.stats.xp += monster.xpValue;
-    state.addMessage(`You kill the ${monster.name}! (${actualDamage} damage, +${monster.xpValue} XP)`);
-
-    // Level up check: 20 XP per level
-    const xpPerLevel = 20;
-    const newLevel = Math.floor(state.stats.xp / xpPerLevel) + 1;
-    if (newLevel > state.stats.level) {
-      state.stats.level = newLevel;
-      state.stats.maxHp += 5;
-      state.stats.hp = Math.min(state.stats.hp + 5, state.stats.maxHp);
-      state.stats.strength++;
-      state.stats.maxStrength++;
-      state.addMessage(`*** LEVEL UP! *** Level ${newLevel}! (+5 HP, +1 Str)`);
-    }
-  } else {
-    state.addMessage(`You hit the ${monster.name} for ${actualDamage} damage. (${monster.hp}/${monster.maxHp} HP)`);
-  }
-
-  return true;
+  return playerAttackMonster(state, monster);
 }
 
 /**
  * Monster attacks the player.
- * Uses BrogueCE hit probability: accuracy * 0.987^defense
+ * Delegates to combat.ts for proper BrogueCE formulas.
  */
 export function monsterAttacksPlayer(state: GameState, monster: Monster): void {
-  const rng = state.rng;
-
-  // Hit probability: monster accuracy vs player defense (armor)
-  const armorDef = state.armor?.defense ?? 0;
-  const hitProb = Math.min(100, Math.floor(monster.accuracy * Math.pow(0.987, armorDef * 10)));
-  const hits = rng.range(0, 99) < hitProb;
-
-  if (!hits) {
-    state.addMessage(`The ${monster.name} misses you.`);
-    return;
-  }
-
-  // Damage from monster's damage range, reduced by armor
-  const rawDamage = rng.clumpedRange(monster.damage.min, monster.damage.max, monster.damage.clump);
-  const actualDamage = Math.max(1, rawDamage - armorDef);
-
-  state.stats.hp -= actualDamage;
-
-  if (state.stats.hp <= 0) {
-    state.stats.hp = 0;
-    state.gameOver = true;
-    state.victory = false;
-    state.addMessage(`The ${monster.name} kills you!`);
-  } else {
-    state.addMessage(`The ${monster.name} hits you for ${actualDamage} damage. (${state.stats.hp}/${state.stats.maxHp} HP)`);
-  }
+  monsterAttackPlayer(state, monster);
 }
 
 /**
