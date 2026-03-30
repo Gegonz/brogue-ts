@@ -22,6 +22,7 @@ export interface Monster {
   attackSpeed: number;
   xpValue: number;
   dead: boolean;
+  sleeping: boolean;
   flags: string[];
 }
 
@@ -48,6 +49,8 @@ function createMonster(catalogIndex: number, x: number, y: number): Monster {
     attackSpeed: entry.attackSpeed,
     xpValue: xpForMonster(entry),
     dead: false,
+    // 75% of monsters start sleeping (matching BrogueCE), except never-sleeps types
+    sleeping: !entry.flags.includes("never_sleeps") && Math.random() > 0.25,
     flags: [...entry.flags],
   };
 }
@@ -149,6 +152,19 @@ export function processMonsterTurns(state: GameState): void {
 
     // Skip immobile monsters
     if (monster.flags.includes("immobile") || monster.flags.includes("inanimate")) continue;
+
+    // Sleeping monsters don't act until player is adjacent or visible
+    if (monster.sleeping) {
+      const dist = Math.abs(monster.x - px) + Math.abs(monster.y - py);
+      if (dist <= 2 || monsterCanSeePlayer(state, monster)) {
+        monster.sleeping = false;
+        if (monsterCanSeePlayer(state, monster)) {
+          state.addMessage(`The ${monster.name} wakes up!`);
+        }
+      } else {
+        continue; // still sleeping
+      }
+    }
 
     // Speed system: fast monsters (speed 50) act twice, slow (200) act every other turn
     const speed = monster.moveSpeed || 100;

@@ -330,7 +330,7 @@ mcpServer.registerTool("brogue_admin", {
           damage: { ...entry.damage }, moveSpeed: entry.moveSpeed,
           attackSpeed: entry.attackSpeed,
           xpValue: Math.max(1, Math.floor((entry.maxHP + (entry.damage.min+entry.damage.max)/2*3 + entry.defense/5) / 5)),
-          dead: false, flags: [...entry.flags],
+          dead: false, sleeping: false, flags: [...entry.flags],
         });
         msg = `Spawned ${entry.name} (${entry.maxHP} HP) at (${mx},${my})`;
       } else {

@@ -110,7 +110,8 @@ export function resolveAttack(
 
   // Sneak attack: triple damage (5x for daggers, but we simplify to 3x)
   if (isSneakAttack) {
-    damage *= 3;
+    // BrogueCE: daggers do 5x sneak attack, others do 3x
+    damage *= (state.weapon?.flags.includes("sneak_bonus")) ? 5 : 3;
   }
 
   damage = Math.max(1, damage);
@@ -137,6 +138,12 @@ export function resolveAttack(
  * Player attacks monster using proper combat formulas.
  */
 export function playerAttackMonster(state: GameState, monster: Monster): boolean {
+  // Wake up sleeping monsters on attack (sneak attack bonus!)
+  const isSneakAttack = monster.sleeping;
+  if (monster.sleeping) {
+    monster.sleeping = false;
+  }
+
   const pAcc = playerAccuracy(state);
   const weaponDmg = state.weapon
     ? { ...state.weapon.damage }
@@ -151,7 +158,7 @@ export function playerAttackMonster(state: GameState, monster: Monster): boolean
     monster.defense,
     monster.hp,
     monster.maxHp,
-    false,
+    isSneakAttack,
   );
 
   monster.hp = result.newHP;
