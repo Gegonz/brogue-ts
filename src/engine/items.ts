@@ -73,16 +73,40 @@ function randomFloorCell(state: GameState): { x: number; y: number } | null {
 export function populateItems(state: GameState): void {
   const rng = state.rng;
   const depth = state.stats.depthLevel;
-  const itemCount = rng.range(3, 5 + Math.min(depth, 5));
+  const itemCount = rng.range(4, 6 + Math.min(depth, 5));
 
   state.floorItems = [];
+
+  // Guarantee 1 weapon on depth 1, and 1 weapon or armor on deeper levels
+  const guaranteed: number[] = [];
+  if (depth === 1) {
+    guaranteed.push(3); // weapon
+  } else {
+    guaranteed.push(rng.percent(60) ? 3 : 4); // weapon or armor
+  }
+  if (depth >= 2 && rng.percent(50)) {
+    guaranteed.push(4); // bonus armor chance on deeper levels
+  }
+
+  for (const forcedTemplate of guaranteed) {
+    const loc = randomFloorCell(state);
+    if (!loc) continue;
+    const template = ITEM_TEMPLATES[forcedTemplate]!;
+    const nameIdx = rng.range(0, template.names.length - 1);
+    state.floorItems.push({
+      x: loc.x, y: loc.y,
+      category: template.category, kind: nameIdx,
+      displayChar: template.displayChar, foreColor: [...template.foreColor],
+      name: template.names[nameIdx]!, collected: false,
+    });
+  }
 
   for (let i = 0; i < itemCount; i++) {
     const loc = randomFloorCell(state);
     if (!loc) continue;
 
     // Pick random item category, weighted
-    const weights = [3, 6, 3, 2, 1, 1, 1, 4]; // food, potion(+heal), scroll, weapon, armor, staff, ring, gold
+    const weights = [2, 5, 3, 3, 2, 1, 1, 4]; // food, potion, scroll, weapon(+), armor(+), staff, ring, gold
     let totalWeight = 0;
     for (const w of weights) totalWeight += w;
     let roll = rng.range(0, totalWeight - 1);
