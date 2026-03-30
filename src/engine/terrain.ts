@@ -68,6 +68,58 @@ export function applyTerrainEffectsToPlayer(state: GameState): void {
 }
 
 /**
+ * Populate a cost map for Dijkstra pathfinding.
+ * Ported from BrogueCE Movement.c populateGenericCostMap / populateCreatureCostMap.
+ */
+export function populateCostMap(state: GameState, costMap: number[][], forPlayer: boolean): void {
+  const { DCOLS, DROWS } = require("../shared/constants.ts") as typeof import("../shared/constants.ts");
+  const PDS_FORBIDDEN = -1;
+  const PDS_OBSTRUCTION = -2;
+
+  for (let i = 0; i < DCOLS; i++) {
+    for (let j = 0; j < DROWS; j++) {
+      const tile = state.pmap[i]![j]!.layers[0]!;
+      const entry = tileCatalog[tile];
+      if (!entry) { costMap[i]![j] = PDS_OBSTRUCTION; continue; }
+
+      const flags = entry.flags;
+
+      // Undiscovered cells are obstacles for the player
+      if (forPlayer && !(state.pmap[i]![j]!.flags & 0x1)) {
+        costMap[i]![j] = PDS_OBSTRUCTION;
+        continue;
+      }
+
+      // Walls and other passability blockers
+      if (flags & (1 << 0)) { // T_OBSTRUCTS_PASSABILITY
+        costMap[i]![j] = (flags & (1 << 8)) ? PDS_OBSTRUCTION : PDS_FORBIDDEN; // diagonal vs forbidden
+        continue;
+      }
+
+      // Lava: forbidden unless fire immune
+      if (flags & T_LAVA_INSTA_DEATH) {
+        costMap[i]![j] = PDS_FORBIDDEN;
+        continue;
+      }
+
+      // Deep water: forbidden for non-swimmers
+      if (flags & T_IS_DEEP_WATER) {
+        costMap[i]![j] = PDS_FORBIDDEN;
+        continue;
+      }
+
+      // Chasm: forbidden
+      if (flags & T_AUTO_DESCENT) {
+        costMap[i]![j] = PDS_FORBIDDEN;
+        continue;
+      }
+
+      costMap[i]![j] = 1; // normal traversal cost
+    }
+  }
+}
+
+/**
  * Get the terrain description at a position.
  */
 export function terrainDescription(state: GameState, x: number, y: number): string {
