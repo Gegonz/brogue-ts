@@ -10,6 +10,7 @@ import { allocGrid } from "./grid.ts";
 import { dijkstraScan } from "./dijkstra.ts";
 import { populateItems, pickUpItem } from "./items.ts";
 import { populateMonsters, monsterAt, playerAttacksMonster, processMonsterTurns } from "./monsters.ts";
+import { applyTerrainEffectsToPlayer } from "./terrain.ts";
 import { processTurnEffects, tryEatFood } from "./time.ts";
 
 import { nbDirs } from "../shared/constants.ts";
@@ -297,6 +298,7 @@ export class GameEngine {
         this.endTurn();
       } else if (tryMovePlayer(this.state, dx, dy)) {
         this.state.stats.turnNumber++;
+        applyTerrainEffectsToPlayer(this.state);
         pickUpItem(this.state);
         tryEatFood(this.state);
         processMonsterTurns(this.state);
@@ -357,6 +359,7 @@ export class GameEngine {
       if (step) {
         if (tryMovePlayer(this.state, step.dx, step.dy)) {
           this.state.stats.turnNumber++;
+          applyTerrainEffectsToPlayer(this.state);
           pickUpItem(this.state);
           tryEatFood(this.state);
           processMonsterTurns(this.state);
