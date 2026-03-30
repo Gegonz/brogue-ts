@@ -67,22 +67,22 @@ brogue_new({seed: 100})
 brogue_auto({turns: 50})   // repeat until victory or death
 ```
 
-## AI Benchmark (10 seeds)
+## AI Benchmark (10 seeds, 34 iterations)
 
-| Seed | Depth | Level | Turns | Kills | Result |
-|------|-------|-------|-------|-------|--------|
-| 1 | 6 | 5 | 2386 | 27 | combat |
-| 10 | 7 | 8 | 2729 | 36 | combat |
-| 42 | 7 | 6 | 2189 | 27 | combat |
-| 77 | 5 | 3 | 1929 | 15 | combat |
-| **100** | **10** | **10** | **4152** | **40** | **VICTORY** |
-| 200 | 8 | 7 | 3248 | 30 | combat |
-| 555 | 6 | 3 | 2491 | 17 | combat |
-| 777 | 3 | 1 | 830 | 6 | combat |
-| 999 | 8 | 10 | 3249 | 41 | combat |
-| 1234 | 9 | 8 | 3208 | 32 | combat |
+| Seed | Depth | Level | Turns | Kills | Equipment | Result |
+|------|-------|-------|-------|-------|-----------|--------|
+| **1** | **10** | **10** | **2449** | **43** | war axe + plate | **VICTORY** |
+| **10** | **10** | **10** | **3694** | **36** | broadsword + plate | **VICTORY** |
+| **42** | **10** | **16** | **3832** | **53** | war axe + plate | **VICTORY** |
+| **77** | **10** | **13** | **3640** | **45** | war hammer + plate | **VICTORY** |
+| **100** | **10** | **11** | **3758** | **35** | war axe + plate | **VICTORY** |
+| 200 | 7 | 5 | 3000 | 28 | war axe + banded | combat |
+| **555** | **10** | **14** | **3633** | **57** | war hammer + banded | **VICTORY** |
+| **777** | **10** | **18** | **3099** | **54** | war axe + plate | **VICTORY** |
+| **999** | **10** | **15** | **4023** | **47** | war hammer + plate | **VICTORY** |
+| **1234** | **10** | **16** | **4279** | **50** | war axe + plate | **VICTORY** |
 
-**Average depth: 6.9 | Win rate: 10% | Best: D10 Lv10, 40 kills**
+**Win rate: 90% (9/10) | Avg depth: 9.7 | Best: Lv18, 57 kills (seed 555)**
 
 ## Architecture
 
