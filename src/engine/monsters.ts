@@ -122,7 +122,8 @@ export function monsterAt(state: GameState, x: number, y: number): Monster | nul
  */
 export function playerAttacksMonster(state: GameState, monster: Monster): boolean {
   const rng = state.rng;
-  const damage = rng.range(monster.attack.min, monster.attack.max + state.stats.strength - 10);
+  const weaponBonus = state.weapon?.bonusDamage ?? 0;
+  const damage = rng.range(1, 3 + state.stats.strength - 10 + weaponBonus);
   const actualDamage = Math.max(1, damage - monster.defense);
 
   monster.hp -= actualDamage;
@@ -143,8 +144,9 @@ export function playerAttacksMonster(state: GameState, monster: Monster): boolea
  */
 export function monsterAttacksPlayer(state: GameState, monster: Monster): void {
   const rng = state.rng;
+  const armorDef = state.armor?.defense ?? 0;
   const damage = rng.range(monster.attack.min, monster.attack.max);
-  const actualDamage = Math.max(1, damage);
+  const actualDamage = Math.max(1, damage - armorDef);
 
   state.stats.hp -= actualDamage;
 

@@ -156,6 +156,8 @@ export interface GameStateSnapshot {
     seed: number;
     monstersKilled: number;
     deepestLevel: number;
+    weapon: string | null;
+    armor: string | null;
     x: number; y: number;
   };
   messages: string[];
@@ -350,6 +352,8 @@ export class GameEngine {
         seed: Number(s.seed),
         monstersKilled: s.monstersKilled,
         deepestLevel: s.deepestLevel,
+        weapon: this.state.weapon?.name ?? null,
+        armor: this.state.armor?.name ?? null,
         x: this.state.playerPos.x,
         y: this.state.playerPos.y,
       },

@@ -138,6 +138,40 @@ export function pickUpItem(state: GameState): FloorItem | null {
         } else {
           state.addMessage(`You drink ${item.name}. It tastes refreshing.`);
         }
+      } else if (item.category === ItemCategory.WEAPON) {
+        const weaponDamage: Record<string, number> = {
+          "a dagger": 2, "a sword": 4, "a broadsword": 6,
+          "a mace": 5, "a war hammer": 7, "a spear": 4, "a war axe": 8,
+        };
+        const bonus = weaponDamage[item.name] ?? 3;
+        if (!state.weapon || bonus > state.weapon.bonusDamage) {
+          const old = state.weapon;
+          state.weapon = { name: item.name, bonusDamage: bonus };
+          if (old) {
+            state.addMessage(`You swap your ${old.name} for ${item.name}. (+${bonus} damage)`);
+          } else {
+            state.addMessage(`You equip ${item.name}. (+${bonus} damage)`);
+          }
+        } else {
+          state.addMessage(`You see ${item.name} but your ${state.weapon.name} is better.`);
+        }
+      } else if (item.category === ItemCategory.ARMOR) {
+        const armorDef: Record<string, number> = {
+          "leather armor": 2, "scale mail": 3, "chain mail": 4,
+          "banded mail": 5, "plate armor": 7,
+        };
+        const def = armorDef[item.name] ?? 2;
+        if (!state.armor || def > state.armor.defense) {
+          const old = state.armor;
+          state.armor = { name: item.name, defense: def };
+          if (old) {
+            state.addMessage(`You swap your ${old.name} for ${item.name}. (+${def} defense)`);
+          } else {
+            state.addMessage(`You don ${item.name}. (+${def} defense)`);
+          }
+        } else {
+          state.addMessage(`You see ${item.name} but your ${state.armor.name} is better.`);
+        }
       } else {
         state.addMessage(`You see ${item.name} here.`);
       }
