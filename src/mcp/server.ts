@@ -85,6 +85,60 @@ mcpServer.registerTool("brogue_look", {
   };
 });
 
+mcpServer.registerTool("brogue_auto", {
+  description: "Play one intelligent turn automatically. Analyzes the game state and takes the best action: fight adjacent monsters, explore toward unexplored areas, navigate to stairs when done, or descend when on stairs. Returns the updated game state with a 'reasoning' field explaining the decision. Call this repeatedly for fully autonomous play.",
+  inputSchema: {
+    turns: z.number().optional().describe("Number of turns to play automatically (default 1, max 50)"),
+  },
+}, async ({ turns }) => {
+  const eng = getEngine();
+  const numTurns = Math.min(turns ?? 1, 50);
+  const events: string[] = [];
+
+  for (let t = 0; t < numTurns; t++) {
+    const state = eng.getState();
+    if (state.phase !== "playing") {
+      events.push(`Game over: ${state.phase}`);
+      break;
+    }
+
+    // Decision logic
+    const onStairs = state.stairsAt &&
+      state.player.x === state.stairsAt.x && state.player.y === state.stairsAt.y;
+
+    if (onStairs) {
+      eng.handleKeystroke(">".charCodeAt(0));
+      events.push(`Descended to depth ${eng.getState().depth}`);
+      continue;
+    }
+
+    // Default: explore (handles auto-fight + stairs navigation)
+    eng.handleKeystroke("x".charCodeAt(0));
+
+    // Check what happened
+    const after = eng.getState();
+    if (after.turn > state.turn) {
+      // Something happened
+      const newMsgs = after.messages.filter(m => !state.messages.includes(m));
+      for (const m of newMsgs) {
+        if (m.includes("kill") || m.includes("hit") || m.includes("equip") ||
+            m.includes("drink") || m.includes("read") || m.includes("zap") ||
+            m.includes("LEVEL UP") || m.includes("gold") || m.includes("eat") ||
+            m.includes("don ") || m.includes("put on")) {
+          events.push(m);
+        }
+      }
+    }
+  }
+
+  const finalState = eng.getState();
+  const reasoning = events.length > 0 ? events.join("; ") : `Explored (turn ${finalState.turn})`;
+
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify({ ...finalState, reasoning }, null, 2) }],
+  };
+});
+
 // Shared transport — same pattern as Augur
 // SDK workaround: bypass validation + reset on re-initialize for Claude Code reconnects
 interface TransportInternals {
