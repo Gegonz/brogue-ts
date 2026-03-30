@@ -95,6 +95,9 @@ export function processTurnEffects(state: GameState): void {
   // --- Status effect decrement ---
   decrementStatuses(state);
 
+  // --- Environment updates ---
+  updateEnvironment(state);
+
   // --- Shield decay ---
   if (state.statuses[STATUS.SHIELDED]! > 0) {
     const decay = Math.max(1, Math.floor(state.maxStatuses[STATUS.SHIELDED]! / 20));
@@ -173,6 +176,32 @@ export function applyStatus(state: GameState, status: number, duration: number):
   initializeStatuses(state);
   state.statuses[status] = Math.max(state.statuses[status]!, duration);
   state.maxStatuses[status] = Math.max(state.maxStatuses[status]!, duration);
+}
+
+/**
+ * Update environment: terrain promotions (doors closing, etc.)
+ * Simplified port of BrogueCE Time.c updateEnvironment().
+ */
+export function updateEnvironment(state: GameState): void {
+  const { DCOLS, DROWS } = require("../shared/constants.ts") as typeof import("../shared/constants.ts");
+
+  // Open doors auto-close after some time (BrogueCE: OPEN_DOOR promotes to CLOSED_DOOR at 10000 promoteChance)
+  // Simplified: 1% chance per turn of closing an open door the player isn't standing on
+  for (let i = 0; i < DCOLS; i++) {
+    for (let j = 0; j < DROWS; j++) {
+      const tile = state.pmap[i]![j]!.layers[0]!;
+      if (tile === 8) { // OPEN_DOOR
+        // Don't close if player is on it
+        if (i === state.playerPos.x && j === state.playerPos.y) continue;
+        // Don't close if a monster is on it
+        if (state.monsters.some((m: { dead: boolean; x: number; y: number }) => !m.dead && m.x === i && m.y === j)) continue;
+        // 1% chance per turn
+        if (state.rng.percent(1)) {
+          state.pmap[i]![j]!.layers[0] = 7; // DOOR (closed)
+        }
+      }
+    }
+  }
 }
 
 /**
