@@ -197,8 +197,12 @@ export class GameEngine {
   /** Common end-of-turn processing */
   private endTurn(): void {
     processTurnEffects(this.state);
-    if (this.state.gameOver && !this.state.victory) {
-      this.state.addMessage(`--- GAME OVER --- Depth ${this.state.stats.deepestLevel}, ${this.state.stats.turnNumber} turns, ${this.state.stats.monstersKilled} kills, ${this.state.stats.gold} gold. Press any key to restart.`);
+    if (this.state.gameOver) {
+      if (this.state.victory) {
+        this.state.addMessage(`*** VICTORY! *** Depth ${this.state.stats.deepestLevel}, Lv${this.state.stats.level}, ${this.state.stats.turnNumber} turns, ${this.state.stats.monstersKilled} kills, ${this.state.stats.gold} gold!`);
+      } else {
+        this.state.addMessage(`--- GAME OVER --- Depth ${this.state.stats.deepestLevel}, ${this.state.stats.turnNumber} turns, ${this.state.stats.monstersKilled} kills, ${this.state.stats.gold} gold. Press any key to restart.`);
+      }
     }
     this.updateDisplay();
     this.emit("displayChanged");
@@ -316,6 +320,19 @@ export class GameEngine {
         this.state.stats.depthLevel++;
         this.state.stats.deepestLevel = Math.max(this.state.stats.deepestLevel, this.state.stats.depthLevel);
         this.state.stats.turnNumber++;
+
+        // Victory condition: reach depth 10
+        if (this.state.stats.depthLevel >= 10) {
+          this.state.gameOver = true;
+          this.state.victory = true;
+          this.state.messages = [];
+          this.state.addMessage(`*** VICTORY! *** You escaped the dungeon from depth ${this.state.stats.deepestLevel}!`);
+          this.state.addMessage(`Level ${this.state.stats.level}, ${this.state.stats.turnNumber} turns, ${this.state.stats.monstersKilled} kills, ${this.state.stats.gold} gold.`);
+          this.updateDisplay();
+          this.emit("displayChanged");
+          return;
+        }
+
         this.state.initGrids();
         generateDungeon(this.state);
         populateItems(this.state);
@@ -324,7 +341,6 @@ export class GameEngine {
         updateLighting(this.state);
         this.updateDisplay();
         this.emit("displayChanged");
-        // Clear old messages from previous level
         this.state.messages = [];
         this.state.addMessage(`You descend to depth ${this.state.stats.depthLevel}.`);
       } else {
